@@ -9,6 +9,23 @@
 Builds Release with ad-hoc signing, replaces `/Applications/Babbler.app`, and
 relaunches.
 
+## Build and distribute a DMG
+
+To create a distributable DMG for another Mac:
+
+```sh
+./scripts/make_dmg.sh [VERSION]
+```
+
+This produces `dist/Babbler-<VERSION>.dmg` containing:
+- `Babbler.app` (ad-hoc signed, ready to drag)
+- `Applications/` symlink
+- `README.txt` (installation instructions in English & Russian)
+
+Share the DMG, and the recipient unpacks by dragging `Babbler.app` into their
+`Applications` folder. The included README.txt walks through permissions and
+the Gatekeeper workaround.
+
 ## Install a prebuilt archive on another Mac
 
 ```sh
@@ -17,6 +34,17 @@ xattr -dr com.apple.quarantine Babbler.app     # ad-hoc signed, not notarised
 cp -R Babbler.app /Applications/
 open /Applications/Babbler.app
 ```
+
+### Установка на другой Mac через DMG
+
+Получите DMG от создателя (см. выше), затем:
+
+1. Откройте DMG двойным щелчком
+2. Перетащите `Babbler.app` в папку `Applications`
+3. Закройте окно DMG и выньте его (правый клик → Eject)
+4. Откройте `System Settings` → `Privacy & Security`
+5. Добавьте Babbler в `Accessibility` и `Input Monitoring` (см. ниже)
+6. Запустите `/Applications/Babbler.app`
 
 ## Permissions — both are required
 
