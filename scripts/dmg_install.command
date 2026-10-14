@@ -46,6 +46,7 @@ for pid in $(pgrep -f "Babbler.app/Contents/MacOS/Babbler" || true); do
 done
 
 RESET_TCC="$(tcc_reset_decision "$DEST" "$SRC")"
+HAD_PREVIOUS=no; [[ -d "$DEST" ]] && HAD_PREVIOUS=yes
 
 echo "==> Installing to $DEST..."
 rm -rf "$DEST"
@@ -66,6 +67,16 @@ fi
 
 echo "==> Launching Babbler..."
 open "$DEST"
+
+if [[ "$RESET_TCC" == "no" && "$HAD_PREVIOUS" == "yes" ]]; then
+  cat <<'EOF'
+
+Готово. Подпись не изменилась — разрешения сохранены.
+Done. Signature unchanged — permissions kept.
+EOF
+  exit 0
+fi
+
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" || true
 
 cat <<'EOF'
