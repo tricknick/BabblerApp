@@ -212,6 +212,8 @@ Two undos of the same word add it to a persistent ignore list.
 Realistic non-words — `kubernetes`, `nginx`, `qwerty`, `asdf`, `github`,
 `recieve`, `teh` — are all correctly left alone.
 
+**Code and address skip rules.** `AutoSwitchEngine.looksLikeCodeOrAddress` keeps tokens as typed when they look like URLs, emails, paths, hashtags/vars, `_`/`::`/`->`/`=>`, camelCase, or digit+letter mixes. Punctuation keys (`, . ; ' [ ] `` ` ``) never trigger it.
+
 **Not implemented** (deliberately deferred, as in "Out of scope"): the sound
 option and the excluded-apps editor UI. The exclusion list itself works and
 ships with a sensible default (Terminal, iTerm, Warp, Xcode, VS Code, IntelliJ,

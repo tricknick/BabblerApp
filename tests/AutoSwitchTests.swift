@@ -205,6 +205,40 @@ for phrase in englishPhrases {
 }
 print("  English on the RU layout: \(enFixed)/\(enTotal)")
 
+// MARK: - URLs, emails, paths and code identifiers
+
+print("=== URLs, emails, paths and code are never auto-switched")
+let codeLike = [
+  "https://github.com", "http://localhost:8080", "www.google.com", "nick@gmail.com",
+  "@tricknick", "/Users/vlasov", "~/Documents", "./run.sh", "../src", "C:\\Users",
+  "#release", "$HOME", "my_var", "std::vector", "a->b", "x=>y", "a==b",
+  "getValue", "iPhone", "camelCaseWord", "h264", "v1", "2fa", "utf8", "snake_case_name",
+]
+for word in codeLike {
+  check(AutoSwitchEngine.looksLikeCodeOrAddress(word), "\(word) must look like code")
+  check(AutoSwitchEngine.evaluate(word: word, currentLayout: .english) == .keep,
+        "\(word) must not switch")
+  check(!AutoSwitchEngine.isExactMatch(word: word, currentLayout: .english),
+        "\(word) must not anchor a phrase sweep")
+  check(!AutoSwitchEngine.qualifiesForPhraseExtension(word: word, currentLayout: .english),
+        "\(word) must not be swept into a phrase")
+}
+check(AutoSwitchEngine.looksLikeCodeOrAddress("привет2"), "Cyrillic letters mixed with digits must look like code")
+check(AutoSwitchEngine.evaluate(word: "привет2", currentLayout: .russian) == .keep, "привет2 must not switch")
+
+print("=== Russian words typed with punctuation keys still convert")
+let punctuationWords: [(String, Layout)] = [
+  (",bpytc", .english), ("ghbdtn", .english), ("ghdtn", .english),
+  ("j,]tv", .english), ("'nj", .english), ("[jhjij", .english), ("cgfcb,j", .english),
+  ("lf;t", .english), ("nt,t", .english),
+]
+for (typed, layout) in punctuationWords {
+  check(!AutoSwitchEngine.looksLikeCodeOrAddress(typed), "\(typed) must not look like code")
+  check(AutoSwitchEngine.evaluate(word: typed, currentLayout: layout) == .switchLayout,
+        "\(typed) must still switch")
+}
+check(!AutoSwitchEngine.looksLikeCodeOrAddress("GHbdtn"), "sticky Shift on Привет is not camelCase")
+
 // MARK: - Full sweep
 
 print("=== full dictionary sweep")

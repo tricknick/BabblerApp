@@ -44,7 +44,7 @@ enum AutoSwitchEngine {
     guard dictionary.isReady else { return .keep }
 
     let trimmed = rawWord.trimmingCharacters(in: trimmableCharacters)
-    guard isEligible(trimmed) else { return .keep }
+    guard isEligible(trimmed), !looksLikeCodeOrAddress(trimmed) else { return .keep }
 
     let word = trimmed.lowercased()
 
@@ -93,8 +93,44 @@ enum AutoSwitchEngine {
     currentLayout: Layout,
     dictionary: LayoutDictionary = .shared
   ) -> Bool {
-    let word = rawWord.trimmingCharacters(in: trimmableCharacters).lowercased()
+    let trimmed = rawWord.trimmingCharacters(in: trimmableCharacters)
+    guard !looksLikeCodeOrAddress(trimmed) else { return false }
+    let word = trimmed.lowercased()
     return dictionary.contains(convert(word, to: currentLayout.other), in: currentLayout.other)
+  }
+
+  /// Whether a typed token is a URL, email, path, mention, hashtag, shell
+  /// variable or code identifier. Checks the characters as typed in the current
+  /// layout, never a conversion of them.
+  ///
+  /// `. , ; ' [ ] \`` are not rules here: they are Russian letters on the
+  /// English layout, so none of these checks fire on a Russian word typed with
+  /// those keys. Any underscore counts, not only one between letters, since no
+  /// word in either layout uses it.
+  static func looksLikeCodeOrAddress(_ typed: String) -> Bool {
+    let lowered = typed.lowercased()
+    if lowered.contains("://") || lowered.hasPrefix("www.") { return true }
+    if typed.contains("@") { return true }
+    if typed.hasPrefix("/") || typed.hasPrefix("~/") || typed.hasPrefix("./")
+      || typed.hasPrefix("../") || typed.contains("\\") {
+      return true
+    }
+    if typed.hasPrefix("#") || typed.hasPrefix("$") { return true }
+    if typed.contains("_") { return true }
+    if ["::", "->", "=>", "=="].contains(where: { typed.contains($0) }) { return true }
+
+    let characters = Array(typed)
+    let hasDigit = characters.contains { ("0"..."9").contains($0) }
+    let hasLetter = characters.contains { $0.isLetter }
+    if hasDigit && hasLetter { return true }
+
+    // camelCase: only a lowercase Latin letter followed by an uppercase one.
+    // "GHbdtn" (sticky Shift on "Привет") has no such pair and stays eligible.
+    for index in characters.indices.dropFirst()
+    where ("a"..."z").contains(characters[index - 1]) && ("A"..."Z").contains(characters[index]) {
+      return true
+    }
+    return false
   }
 
   private static func hasAmbiguousTrailing(_ word: String) -> Bool {
@@ -129,7 +165,9 @@ enum AutoSwitchEngine {
   ) -> Bool {
     guard dictionary.isReady else { return false }
 
-    let word = rawWord.trimmingCharacters(in: trimmableCharacters).lowercased()
+    let trimmed = rawWord.trimmingCharacters(in: trimmableCharacters)
+    guard !looksLikeCodeOrAddress(trimmed) else { return false }
+    let word = trimmed.lowercased()
     guard !word.isEmpty, word.count <= 4 else { return false }
     guard word == word.lowercased() else { return false }
     guard word.rangeOfCharacter(from: .decimalDigits) == nil else { return false }
