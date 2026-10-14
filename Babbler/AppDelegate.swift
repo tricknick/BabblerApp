@@ -160,6 +160,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // A correction the user undid means the word they originally typed was
         // right where it stood — worth learning in its original layout.
         autoSwitchMemory.onRejection = { [weak self] word in
+            autoSwitchStats.recordUndo()
             guard let self, let layout = self.layoutBeforeAutoSwitch else { return }
             self.noteKeptWord(word, layout: layout)
         }
@@ -347,7 +348,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         let normalized = AutoSwitchEngine.normalize(word)
         guard !autoSwitchMemory.shouldSkip(word: normalized),
-              AutoSwitchEngine.evaluate(word: word, currentLayout: layout) == .switchLayout else {
+              let engineTier = AutoSwitchEngine.matchTier(word: word, currentLayout: layout) else {
             rememberTypedWord(record, word)
             // Auto-switch looked at this word and left it alone: a candidate
             // for the lexicon, since a word it does switch is either wrong or
@@ -364,9 +365,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // match is a weaker signal, and letting it drag neighbouring words in would
         // multiply the error rather than contain it.
         let anchorIsExact = AutoSwitchEngine.isExactMatch(word: word, currentLayout: layout)
-        let full = (anchorIsExact ? phrasePrefix(for: layout) : []) + record
+        let swept = anchorIsExact ? phrasePrefix(for: layout) : []
+        let full = swept + record
         autoSwitchTail = []
 
+        // One correction is counted per auto-switch. A sweep that pulls in earlier
+        // words is a phrase correction; otherwise it is the anchor word's tier.
+        autoSwitchStats.recordSwitch(tier: swept.isEmpty ? AutoSwitchStats.Tier(engine: engineTier) : .phrase)
         autoSwitchMemory.noteCorrection(word: normalized)
         layoutBeforeAutoSwitch = layout
         scheduleAutoSwitchSettle()
@@ -491,6 +496,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             // Text replacement is optional. Every action switches the input language,
             // including when no text has been typed or selected.
             noteManualActionForUndo()
+            autoSwitchStats.recordManualSwap()
             resetAutoSwitchBuffers()
             forgetManuallySwapped(actionResult == .lineAction ? lineText : text)
             beginSwitch(actionResult == .lineAction ? lineRecord : wordRecord)

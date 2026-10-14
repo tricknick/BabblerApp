@@ -69,6 +69,7 @@ struct MenuView: View {
     @AppStorage(clipboardHistoryEnabledKey) var clipboardHistoryEnabled: Bool = true
     @AppStorage(globeActionKeyEnabledKey) var globeActionKeyEnabled: Bool = false
     @AppStorage(langSwitchKeyCodeKey) var switchKeyCodeRaw: Int = Int(Key.option)
+    @ObservedObject private var stats = autoSwitchStats
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -85,6 +86,15 @@ struct MenuView: View {
             .padding(.horizontal, 14)
             .padding(.top, 10)
             .padding(.bottom, 6)
+
+            if stats.today.switches > 0 {
+                Text("Сегодня: \(stats.today.summaryLine)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 6)
+                    .help("Всего: \(stats.total.summaryLine)")
+            }
 
             if !appDelegate.hasAccessibility {
                 Text("⛔️ Babbler needs Accessibility access to replace text")

@@ -38,6 +38,7 @@
 		BB2000000523F00001AA01 /* AutoSwitchMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000523F00001AA01 /* AutoSwitchMemory.swift */; };
 		BB2000000A0F00000100AA01 /* ThemePacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000A0F00000100AA01 /* ThemePacks.swift */; };
 		BB2000000A1F00000100AA01 /* UserLexicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000A1F00000100AA01 /* UserLexicon.swift */; };
+		BB2000000A2F00000100AA01 /* AutoSwitchStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000A2F00000100AA01 /* AutoSwitchStats.swift */; };
 		BB2000000B0F00000100AA01 /* pack-it.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000B0F00000100AA01 /* pack-it.txt.gz */; };
 		BB2000000C0F00000100AA01 /* pack-business.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000C0F00000100AA01 /* pack-business.txt.gz */; };
 		BB2000000D0F00000100AA01 /* pack-gaming.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000D0F00000100AA01 /* pack-gaming.txt.gz */; };
@@ -86,6 +87,7 @@
 		BB1000000523F00001AA01 /* AutoSwitchMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSwitchMemory.swift; sourceTree = "<group>"; };
 		BB1000000A0F00000100AA01 /* ThemePacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePacks.swift; sourceTree = "<group>"; };
 		BB1000000A1F00000100AA01 /* UserLexicon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserLexicon.swift; sourceTree = "<group>"; };
+		BB1000000A2F00000100AA01 /* AutoSwitchStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSwitchStats.swift; sourceTree = "<group>"; };
 		BB1000000B0F00000100AA01 /* pack-it.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-it.txt.gz"; path = "Resources/pack-it.txt.gz"; sourceTree = "<group>"; };
 		BB1000000C0F00000100AA01 /* pack-business.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-business.txt.gz"; path = "Resources/pack-business.txt.gz"; sourceTree = "<group>"; };
 		BB1000000D0F00000100AA01 /* pack-gaming.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-gaming.txt.gz"; path = "Resources/pack-gaming.txt.gz"; sourceTree = "<group>"; };
@@ -184,6 +186,7 @@
 				BB100000063F00000100AA01 /* NGramModel.swift */,
 				BB1000000A0F00000100AA01 /* ThemePacks.swift */,
 				BB1000000A1F00000100AA01 /* UserLexicon.swift */,
+				BB1000000A2F00000100AA01 /* AutoSwitchStats.swift */,
 				BB100000064F00000100AA01 /* ngram-ru.bin */,
 				BB1000000B0F00000100AA01 /* pack-it.txt.gz */,
 				BB1000000C0F00000100AA01 /* pack-business.txt.gz */,
@@ -302,6 +305,7 @@
 				BB200000063F00000100AA01 /* NGramModel.swift in Sources */,
 				BB2000000A0F00000100AA01 /* ThemePacks.swift in Sources */,
 				BB2000000A1F00000100AA01 /* UserLexicon.swift in Sources */,
+				BB2000000A2F00000100AA01 /* AutoSwitchStats.swift in Sources */,
 				7A765D5F25D916460076B974 /* Key.swift in Sources */,
 				286A658A2F94003B00D25CBC /* MenuView.swift in Sources */,
 				286A658B2F94003B00D25CBC /* BabblerApp.swift in Sources */,

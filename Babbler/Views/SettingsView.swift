@@ -64,6 +64,19 @@ struct SettingsView: View {
     @State private var learnedWords: [String] = []
     @AppStorage(userLexiconEnabledKey) private var userLexiconEnabled: Bool = true
     @State private var learnedLexiconCount: Int = 0
+    @ObservedObject private var stats = autoSwitchStats
+
+    /// Total line plus per-tier breakdown, e.g. "12 исправлений · 1 отмена · точность 92%\nПо словарю: 8 · ...".
+    private var statsSettingsText: String {
+        let total = stats.total
+        guard total.switches > 0 else {
+            return "Пока нет автоисправлений. Статистика хранится только на этом Mac."
+        }
+        let breakdown = AutoSwitchStats.Tier.allCases
+            .map { "\($0.title): \(total.switchesByTier[$0] ?? 0)" }
+            .joined(separator: " · ")
+        return "\(total.summaryLine)\n\(breakdown)"
+    }
 
     @State private var enabledThemePacks: Set<String> = Set(ThemePacks.allIds)
 
@@ -171,6 +184,20 @@ struct SettingsView: View {
                         .toggleStyle(.switch)
                 }
                 if autoSwitchEnabled {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Статистика")
+                            Text(statsSettingsText)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                        Button("Сбросить статистику") {
+                            autoSwitchStats.reset()
+                        }
+                        .disabled(stats.total.switches == 0 && stats.total.undos == 0 && stats.total.manualSwaps == 0)
+                    }
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Learned exceptions")
