@@ -30,7 +30,8 @@
 		BB200000012F00000100AA01 /* LayoutDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB100000012F00000100AA01 /* LayoutDictionary.swift */; };
 		BB200000022F00000100AA01 /* AutoSwitchEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB100000022F00000100AA01 /* AutoSwitchEngine.swift */; };
 		BB200000032F00000100AA01 /* en.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB100000032F00000100AA01 /* en.txt.gz */; };
-		BB200000042F00000100AA01 /* ru.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB100000042F00000100AA01 /* ru.txt.gz */; };
+		BB200000042F00000100AA01 /* ru-forms.bin in Resources */ = {isa = PBXBuildFile; fileRef = BB100000042F00000100AA01 /* ru-forms.bin */; };
+		BB200000052F00000100AA01 /* ru-typo.bin in Resources */ = {isa = PBXBuildFile; fileRef = BB100000052F00000100AA01 /* ru-typo.bin */; };
 		BB2000000523F00001AA01 /* AutoSwitchMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000523F00001AA01 /* AutoSwitchMemory.swift */; };
 /* End PBXBuildFile section */
 
@@ -67,7 +68,8 @@
 		BB100000012F00000100AA01 /* LayoutDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutDictionary.swift; sourceTree = "<group>"; };
 		BB100000022F00000100AA01 /* AutoSwitchEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSwitchEngine.swift; sourceTree = "<group>"; };
 		BB100000032F00000100AA01 /* en.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = en.txt.gz; path = Resources/en.txt.gz; sourceTree = "<group>"; };
-		BB100000042F00000100AA01 /* ru.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = ru.txt.gz; path = Resources/ru.txt.gz; sourceTree = "<group>"; };
+		BB100000042F00000100AA01 /* ru-forms.bin */ = {isa = PBXFileReference; lastKnownFileType = file; name = "ru-forms.bin"; path = "Resources/ru-forms.bin"; sourceTree = "<group>"; };
+		BB100000052F00000100AA01 /* ru-typo.bin */ = {isa = PBXFileReference; lastKnownFileType = file; name = "ru-typo.bin"; path = "Resources/ru-typo.bin"; sourceTree = "<group>"; };
 		BB1000000523F00001AA01 /* AutoSwitchMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSwitchMemory.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -157,7 +159,8 @@
 				BB100000012F00000100AA01 /* LayoutDictionary.swift */,
 				BB100000022F00000100AA01 /* AutoSwitchEngine.swift */,
 				BB100000032F00000100AA01 /* en.txt.gz */,
-				BB100000042F00000100AA01 /* ru.txt.gz */,
+				BB100000042F00000100AA01 /* ru-forms.bin */,
+				BB100000052F00000100AA01 /* ru-typo.bin */,
 				7A765D8D25DF09F50076B974 /* StatusItemController.swift */,
 				7A765D9225E2D7170076B974 /* ImageUtils.swift */,
 				7A765D9B25E7ABCE0076B974 /* SettingsViewController.xib */,
@@ -234,7 +237,8 @@
 				7AC0130823A68C9A00FA3F07 /* Assets.xcassets in Resources */,
 				7AC0DEAD23A68C9A00FA3F02 /* AppIcon.icon in Resources */,
 				BB200000032F00000100AA01 /* en.txt.gz in Resources */,
-				BB200000042F00000100AA01 /* ru.txt.gz in Resources */,
+				BB200000042F00000100AA01 /* ru-forms.bin in Resources */,
+				BB200000052F00000100AA01 /* ru-typo.bin in Resources */,
 				7A765D9D25E7ABCE0076B974 /* SettingsViewController.xib in Resources */,
 				7AC0130B23A68C9A00FA3F07 /* Main.storyboard in Resources */,
 			);

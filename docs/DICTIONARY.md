@@ -1,26 +1,143 @@
 # Dictionaries
 
-The auto-switch engine decides using two word lists bundled in the app:
-`Babbler/Resources/en.txt.gz` (138,804 words) and `ru.txt.gz` (200,121 words),
-about 1 MB gzipped and ~12 MB resident once loaded.
+The auto-switch engine decides using word lists bundled in the app:
 
-## How they are built
+| Resource | Content | Size |
+| --- | --- | --- |
+| `Babbler/Resources/en.txt.gz` | 137,354 English words | 0.37 MB gzipped |
+| `Babbler/Resources/ru-forms.bin` | 3,145,518 Russian word forms, hashed | 11.1 MB |
+| `Babbler/Resources/ru-typo.bin` | 205,087 core Russian forms, hashed (typo tier only) | 0.8 MB |
 
-`scripts/build_dictionaries.sh` regenerates both. It intersects a spellcheck
-word list with an OpenSubtitles frequency list, keeps the top N by frequency,
-then merges the curated additions in `dictionaries/`.
+Resident cost of everything loaded: about 26 MB, loaded in about 60 ms
+(measured, see "Memory and load time").
 
-| | English | Russian |
+## Russian: full morphology
+
+The Russian list contains **every inflected form** (cases, numbers, genders,
+conjugations, participles, short forms, comparatives) of the OpenCorpora
+dictionary, not a frequency-ranked sample. `бизнесменами`, `закоммитил`,
+`зарелизили`, `отрефакторенный`, `созвонимся`, `переиспользовать`,
+`считающихся` all resolve.
+
+**Source.** [OpenCorpora](https://opencorpora.org) 0.92 (revision 417150),
+used through the `pymorphy3-dicts-ru` 2.4.417150.4580142 PyPI package, which is
+the same dictionary pre-compiled to a form index. Chosen over Hunspell `ru_RU`
+because it carries full lemma paradigms (including participles, short
+adjectives and comparatives), is available as a pre-compiled form index with no
+`unmunch` or affix-expansion step, and gives a pinned, reproducible build. The opcorpora.org
+download itself was unreachable when this was built, which is the other reason
+for the PyPI mirror.
+
+**License.** OpenCorpora is licensed
+[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). Attribution:
+"OpenCorpora.org (http://opencorpora.org), CC BY-SA 3.0". `ru-forms.bin` is a
+derived work (hashes of forms from that dictionary) and is therefore itself
+distributed under CC BY-SA 3.0; the code remains under the project's licence.
+
+**What is filtered out.**
+
+- Forms tagged `Arch` (archaic) or `Erro` (erroneous), and anything that is not
+  purely `[а-яё]`.
+- One- and two-letter forms come only from `dictionaries/short-ru.txt`, and
+  three-letter forms only if they were already in the old frequency-ranked core
+  list. OpenCorpora is full of rare short forms that collide with English
+  keystrokes.
+- 6 forms whose English-layout key sequence spells an English word that is in
+  the raw `words_alpha` list but not in `en.txt.gz` (`bkpt`↔`илзе`,
+  `faba`↔`афиф` and so on). Only forms outside the old core list are eligible.
+  Forms whose key sequence is in `en.txt.gz` are **never** dropped: a Russian
+  word typed correctly would then be missing and its keys would look like
+  English.
+
+**ё.** The engine does not fold ё and е (they are different keys: `§` and
+`e`), so the list holds both spellings of every form containing ё
+(`пошёл`/`пошел`, `отрефакторённый`/`отрефакторенный`).
+
+**Curated lemmas are inflected.** Every noun, infinitive and adjective in
+`dictionaries/supplement-ru.txt` of four letters or more is passed through the
+pymorphy3 predictor (the top two parses are used), so adding the lemma
+`зарелизить` yields `зарелизили`, `зарелизил`, `зарелизим` and so on. Forms of
+other lemmas, and any lemma the predictor gets wrong, can still be listed
+explicitly; the supplement keeps working as a plain list of words.
+
+### Storage format
+
+A `Set<String>` of three million words costs about 430 MB resident and 2.6 s to
+build, so the list is stored as hashes instead:
+
+- Each form is hashed to 48 bits (FNV-1a over the UTF-8 bytes, then a 64-bit
+  mixer, top 48 bits). There were 0 collisions among the 3.1 M forms; the
+  chance that an arbitrary other string matches a stored hash is about
+  3×10⁻⁸.
+- The hashes are sorted and the gaps between them are Rice-coded (k = 25), which
+  brings 3.1 M hashes to 11.1 MB. File layout: 16-byte header (`BBLH`, version,
+  hash bits, k, count), the bit stream (per gap: `q` zero bits, a one bit, `k`
+  remainder bits, LSB first), 16 bytes of padding.
+- At load time `HashedWordSet` in `LayoutDictionary.swift` decodes the stream
+  into 65,536 buckets selected by the top 16 bits, each a sorted run of 32-bit
+  lows (12.6 MB for the lows plus a 262 KB bucket table), and looks words up by
+  binary search. The hash function in Swift and in `scripts/build_ru_forms.py`
+  must stay identical.
+
+The public `LayoutDictionary` API (`contains`, `hasWordOneInsertionAway`, …) is
+unchanged. English is still a gzipped word list loaded into a `Set<String>`.
+
+### Typo tier uses a smaller list
+
+`hasWordOneInsertionAway` probes about 224 candidate insertions per call. With
+the complete form list that finds a "real word" for far too many non-words:
+correctly typed English words made wrongly switchable rose from 0.0115% to
+0.0693% (6×). So the typo tier probes `ru-typo.bin`, which holds only the old
+frequency-ranked core, the short words and the inflected supplement (205,087
+forms). Exact matches use the full list. The English-side typo tier is
+unchanged.
+
+## How the English list and the Russian core are built
+
+`scripts/build_dictionaries.sh` regenerates all three resources. It first builds
+the English list and the Russian core by intersecting a spellcheck word list
+with an OpenSubtitles frequency list, keeping the top N by frequency, then
+merging the curated additions in `dictionaries/`. Then `scripts/build_ru_forms.py`
+expands the OpenCorpora forms, merges the core and the inflected supplement,
+filters, and writes the two `.bin` files.
+
+| | English | Russian core |
 | --- | --- | --- |
 | Word list | [`dwyl/english-words`](https://github.com/dwyl/english-words) | [`danakt/russian-words`](https://github.com/danakt/russian-words) |
 | Frequency | [`hermitdave/FrequencyWords`](https://github.com/hermitdave/FrequencyWords) 2018 en | same, ru |
 | Kept | 140,000 | 200,000 |
 
-Why intersect rather than take a raw list? The raw Russian list is 1.5 M forms —
-4.5 MB gzipped and far too much resident memory — and has no ordering, so there
-is no safe way to trim it. Frequency ranking makes the cut principled. Russian
-gets a larger budget because it is heavily inflected: one lemma expands into
-dozens of surface forms, all of which people actually type.
+Downloads and the Python virtualenv (pinned `pymorphy3==2.0.6`,
+`pymorphy3-dicts-ru==2.4.417150.4580142`) live in `build/dict-cache/`, which is
+gitignored; only the three compact resources are tracked. The cache also gets
+`ru-forms.txt.gz` (the full plain-text form list, used by the test sweeps) and
+`ru-core.txt`. A rebuild takes about a minute and is deterministic. `REFRESH=1`
+re-downloads the sources.
+
+The raw Russian word list is not used directly because it is unordered; the
+frequency ranking makes its cut principled. It now only supplies the core that
+feeds the typo tier and the short-word policy.
+
+## Full morphology: before and after
+
+`./tests/run.sh`, old 200,189-form list vs the 3,145,518-form list.
+
+| Check | Before | After |
+| --- | --- | --- |
+| EN words falsely recognised as RU-on-wrong-layout | 0 / 137,354 | 0 / 137,354 |
+| RU words falsely recognised | 0 / 200,189 | 0 / 3,145,518 |
+| Phrases, Russian typed on EN layout | 47/47 | 47/47 |
+| Phrases, English typed on RU layout | 34/34 | 34/34 |
+| Typo tier, correct EN words made switchable | 15 / 129,879 = 0.0115% | 13 / 129,879 = 0.0100% |
+| Typo tier, correct RU words made switchable | 33 / 193,955 = 0.0170% | 5 / 195,817 = 0.0026% (every 16th form; `BABBLER_FULL_SWEEP=1` for all) |
+| Out-of-vocabulary English typed correctly, misfires | 32 / 232,480 = 0.0138% | 32 / 232,480 = 0.0138% |
+| 19 inflected forms converting from the EN-typed form | 11 / 19 | 19 / 19 |
+
+The inflected-form test (`tests/AutoSwitchTests.swift`) covers the examples
+above plus `компаниями`, `написанного`, `сделаешь`, `красивейших`, `пошёл` and
+`пошел`; each is checked for the switch, the convert-back and being kept when
+typed in Russian. `BABBLER_RU_LIST=path.txt.gz` runs the suite against an
+alternative plain word list for comparisons.
 
 ## Audit results
 
@@ -69,6 +186,9 @@ was weak: film dialogue from before 2018 contains very little `kubernetes` or
 `бэклог`. That is exactly what `dictionaries/supplement-*.txt` fixes.
 
 ### Accuracy
+
+Numbers from the first audit, with the old 200 k Russian list. Current numbers
+are in "Full morphology: before and after" below.
 
 | Metric | Result |
 | --- | --- |
@@ -319,7 +439,8 @@ that does not belong in the repo.
 
 ### 2. Curated supplements — shipped to everyone
 
-Edit `dictionaries/supplement-en.txt` or `supplement-ru.txt`, then:
+Edit `dictionaries/supplement-en.txt` or `supplement-ru.txt` (for Russian, list
+lemmas: the forms are generated), then:
 
 ```sh
 ./scripts/build_dictionaries.sh
@@ -332,24 +453,19 @@ anything a typical user would benefit from.
 ### 3. Raise the frequency budget
 
 ```sh
-EN_LIMIT=200000 RU_LIMIT=400000 ./scripts/build_dictionaries.sh
+EN_LIMIT=200000 ./scripts/build_dictionaries.sh
 ```
 
-Doubling the Russian budget adds ~265 k rarer inflected forms, roughly +900 KB
-gzipped and +8 MB resident. Diminishing returns: the tail is rare by definition,
-and every added word slightly raises the out-of-vocabulary misfire rate. Re-run
-the accuracy audit if you push this far.
+English only: the Russian budget now sizes the core used by the typo tier, and
+the exact tier already holds every form. Every word added to English slightly
+raises the out-of-vocabulary misfire rate; re-run `./tests/run.sh`.
 
 ### 4. Better sources
 
-- **Hunspell + affix expansion** (`hunspell-ru`, `hunspell-en_GB`,
-  `hunspell-en_US`) generates inflections from lemmas and affix rules, giving
-  fuller coverage than a fixed form list. Adds a build-time dependency on
-  `unmunch`.
-- **OpenCorpora** full paradigms for Russian — the most complete open morphology
-  available, ~5 M forms. Needs a trie or on-disk index rather than a `Set`.
 - **Wiktionary dumps** for both languages, useful for neologisms and slang that
   the 2018 subtitle corpus predates.
+- **Hunspell English** with affix expansion, if English ever needs the same
+  full-morphology treatment. `HashedWordSet` can store it unchanged.
 - **Regional lists** if UK/US divergence ever matters more than it does today —
   currently both are fully covered, so this is not worth doing.
 
@@ -370,5 +486,15 @@ could safely lower the three-character floor to two.
 
 Loading happens once, on a background queue, on first use. Until it completes
 every lookup returns `false`, so the engine declines to act rather than guess.
-Parsing both lists takes roughly 150 ms. Strings of 15 UTF-8 bytes or fewer are
-stored inline by Swift, so most entries cost no heap allocation.
+
+Measured on the development Mac (Apple Silicon, `-O`, English list included):
+
+| Design | Load | Resident growth |
+| --- | --- | --- |
+| Old: `Set<String>` of the 200 k core + English | 135-174 ms | +44 MB |
+| New: `ru-forms.bin` + `ru-typo.bin` + English | 57-58 ms | +26 MB |
+| For comparison: `Set<String>` of all 3.1 M forms + English | 2,644 ms | +428 MB |
+
+The new design is both faster and smaller than the old one despite holding 15×
+as many words, because the old path inflated gzipped text and built strings for
+every word. Lookups are a bucket index plus a binary search.

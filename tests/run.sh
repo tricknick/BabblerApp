@@ -11,7 +11,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-WORK_DIR="$(mktemp -d)"
+WORK_DIR="$ROOT_DIR/build/test-work"
+rm -rf "$WORK_DIR"
+mkdir -p "$WORK_DIR"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 # LayoutDictionary keeps gunzip and its storage private. Expose both for the
@@ -24,8 +26,8 @@ python3 - "$WORK_DIR/LayoutDictionary.swift" <<'PY'
 import sys
 path = sys.argv[1]
 source = open(path).read()
-hook = """  func setForTests(_ en: Set<String>, _ ru: Set<String>) {
-    lock.lock(); english = en; russian = ru; isLoaded = true; lock.unlock()
+hook = """  func setForTests(_ en: Set<String>, _ ru: HashedWordSet, typo: HashedWordSet) {
+    lock.lock(); english = en; russian = ru; russianTypo = typo; isLoaded = true; lock.unlock()
   }
   static func testGunzip(_ data: Data) -> String? { testGunzipImpl(data) }
 

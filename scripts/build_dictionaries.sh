@@ -1,10 +1,19 @@
 #!/bin/zsh
 #
-# Rebuilds Babbler/Resources/{en,ru}.txt.gz from public word lists.
+# Rebuilds Babbler/Resources/{en.txt.gz,ru-forms.bin,ru-typo.bin} from public
+# word lists.
 #
-# The bundled dictionaries are the intersection of a spellcheck word list with
-# an OpenSubtitles frequency list, cut to a size that keeps the app's memory
-# footprint reasonable, plus the curated files in dictionaries/.
+# English is the intersection of a spellcheck word list with an OpenSubtitles
+# frequency list, cut to a size that keeps the app's memory footprint
+# reasonable, plus the curated files in dictionaries/.
+#
+# Russian is every inflected form of the OpenCorpora dictionary (compiled by
+# pymorphy3-dicts-ru), plus the frequency-ranked core built the same way as the
+# English list, plus the curated files with their forms generated. It is stored
+# as sorted hashes: see scripts/build_ru_forms.py and docs/DICTIONARY.md.
+#
+# Downloads and intermediates go to build/dict-cache (gitignored) and are
+# reused between runs; set REFRESH=1 to fetch everything again.
 #
 # Run this after editing anything in dictionaries/, then rebuild the app.
 
@@ -13,35 +22,49 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_DIR="$ROOT_DIR/Babbler/Resources"
 SUPP_DIR="$ROOT_DIR/dictionaries"
-WORK_DIR="$(mktemp -d)"
-trap 'rm -rf "$WORK_DIR"' EXIT
+CACHE_DIR="$ROOT_DIR/build/dict-cache"
+mkdir -p "$CACHE_DIR" "$OUT_DIR"
 
-# Word forms kept per language. Russian needs far more because it is heavily
-# inflected: one lemma expands to dozens of surface forms.
+# Word forms kept per language in the frequency-ranked lists. Russian needs far
+# more because it is heavily inflected: one lemma expands to dozens of surface
+# forms. The Russian list is only the core now: the full set of forms comes from
+# OpenCorpora.
 EN_LIMIT="${EN_LIMIT:-140000}"
 RU_LIMIT="${RU_LIMIT:-200000}"
 # Frequency-rank cutoff for generated three-letter words (see the note in the
 # Python block). Curated words in dictionaries/ are never subject to it.
 SHORT_RANK_LIMIT="${SHORT_RANK_LIMIT:-30000}"
 
+# Pinned: the form list has to be reproducible. This is OpenCorpora 0.92,
+# revision 417150 (CC BY-SA 3.0).
+PYMORPHY_PACKAGES=(pymorphy3==2.0.6 pymorphy3-dicts-ru==2.4.417150.4580142)
+
 EN_WORDS_URL="https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt"
 RU_WORDS_URL="https://raw.githubusercontent.com/danakt/russian-words/master/russian.txt"
 EN_FREQ_URL="https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/en/en_full.txt"
 RU_FREQ_URL="https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/ru/ru_full.txt"
 
+fetch() {
+  local url="$1" target="$2"
+  if [[ "${REFRESH:-0}" == "1" || ! -s "$target" ]]; then
+    curl -fsSL --max-time 300 -o "$target.part" "$url"
+    mv "$target.part" "$target"
+  fi
+}
+
 echo "==> Downloading source lists..."
-curl -sSL --max-time 300 -o "$WORK_DIR/en_words.txt" "$EN_WORDS_URL"
-curl -sSL --max-time 300 -o "$WORK_DIR/ru_words.raw" "$RU_WORDS_URL"
-curl -sSL --max-time 300 -o "$WORK_DIR/en_freq.txt"  "$EN_FREQ_URL"
-curl -sSL --max-time 300 -o "$WORK_DIR/ru_freq.txt"  "$RU_FREQ_URL"
+fetch "$EN_WORDS_URL" "$CACHE_DIR/en_words.txt"
+fetch "$RU_WORDS_URL" "$CACHE_DIR/ru_words.raw"
+fetch "$EN_FREQ_URL"  "$CACHE_DIR/en_freq.txt"
+fetch "$RU_FREQ_URL"  "$CACHE_DIR/ru_freq.txt"
 
 # Everything below is done in Python on purpose. This pipeline is all about
 # character counts and case folding on Cyrillic, and the BSD shell tools get
 # both wrong: `awk`'s length() counts bytes, so every two-letter Cyrillic word
 # measures 4 and slips past a "3 or more" filter, and `tr 'А-ЯЁ' 'а-яё'` expands
 # its ranges bytewise and mangles multi-byte input. Both failures are silent.
-echo "==> Building dictionaries..."
-python3 - "$WORK_DIR" "$SUPP_DIR" "$OUT_DIR" "$EN_LIMIT" "$RU_LIMIT" "$SHORT_RANK_LIMIT" <<'PY'
+echo "==> Building the English list and the Russian core..."
+python3 - "$CACHE_DIR" "$SUPP_DIR" "$OUT_DIR" "$EN_LIMIT" "$RU_LIMIT" "$SHORT_RANK_LIMIT" <<'PY'
 import gzip, re, sys
 from pathlib import Path
 
@@ -123,14 +146,40 @@ for lang, (words_path, freq_path, encoding) in sources.items():
     final |= curated(supp / f"supplement-{lang}.txt", lang, 3, 64)
     final |= curated(supp / f"short-{lang}.txt", lang, 1, 2)
 
-    target = out / f"{lang}.txt.gz"
     payload = ("\n".join(sorted(final)) + "\n").encode("utf-8")
-    with gzip.GzipFile(target, "wb", compresslevel=9, mtime=0) as handle:
-        handle.write(payload)
+    if lang == "en":
+        target = out / "en.txt.gz"
+        with gzip.GzipFile(target, "wb", compresslevel=9, mtime=0) as handle:
+            handle.write(payload)
+    else:
+        # Not bundled: the input of the Russian morphology step below. The
+        # supplement is merged there too, with its forms generated.
+        target = work / "ru-core.txt"
+        target.write_bytes(payload)
 
     short = sum(1 for w in final if len(w) <= 2)
     print(f"    {lang}: {len(final)} words ({short} of 1-2 letters), "
           f"{target.stat().st_size // 1024} KB")
 PY
 
+echo "==> Building the Russian forms (OpenCorpora)..."
+VENV="$CACHE_DIR/venv"
+if [[ ! -x "$VENV/bin/python" ]]; then
+  python3 -m venv "$VENV"
+fi
+if ! "$VENV/bin/python" -c "import pymorphy3" 2>/dev/null; then
+  "$VENV/bin/pip" install --quiet "${PYMORPHY_PACKAGES[@]}"
+fi
+
+"$VENV/bin/python" "$ROOT_DIR/scripts/build_ru_forms.py" \
+  --core "$CACHE_DIR/ru-core.txt" \
+  --supplement "$SUPP_DIR/supplement-ru.txt" \
+  --short "$SUPP_DIR/short-ru.txt" \
+  --english "$OUT_DIR/en.txt.gz" \
+  --english-raw "$CACHE_DIR/en_words.txt" \
+  --keys "$ROOT_DIR/Babbler/KeyDictionary.swift" \
+  --out-dir "$OUT_DIR" \
+  --cache "$CACHE_DIR"
+
+rm -f "$OUT_DIR/ru.txt.gz"
 echo "==> Done. Rebuild the app to pick them up: ./scripts/install.sh"

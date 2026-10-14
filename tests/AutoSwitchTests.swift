@@ -13,9 +13,8 @@ import Foundation
 let resources = ProcessInfo.processInfo.environment["BABBLER_RESOURCES"]
   ?? FileManager.default.currentDirectoryPath + "/Babbler/Resources"
 
-func loadWords(_ name: String) -> [String] {
-  let url = URL(fileURLWithPath: "\(resources)/\(name).txt.gz")
-  let data = try! Data(contentsOf: url)
+func loadWords(_ path: String) -> [String] {
+  let data = try! Data(contentsOf: URL(fileURLWithPath: path))
   var words: [String] = []
   LayoutDictionary.testGunzip(data)!.enumerateLines { line, _ in
     if !line.isEmpty { words.append(line) }
@@ -23,9 +22,25 @@ func loadWords(_ name: String) -> [String] {
   return words
 }
 
-let englishWords = loadWords("en")
-let russianWords = loadWords("ru")
-LayoutDictionary.shared.setForTests(Set(englishWords), Set(russianWords))
+// Russian ships as hashes, which cannot be enumerated. The sweeps below need the
+// word list itself, which scripts/build_dictionaries.sh leaves in its cache.
+let cacheDirectory = ProcessInfo.processInfo.environment["BABBLER_DICT_CACHE"]
+  ?? FileManager.default.currentDirectoryPath + "/build/dict-cache"
+// BABBLER_RU_LIST swaps in a plain gzipped word list for the bundled hashes, to
+// compare candidate lists with the same checks.
+let russianListOverride = ProcessInfo.processInfo.environment["BABBLER_RU_LIST"]
+let russianListPath = russianListOverride ?? cacheDirectory + "/ru-forms.txt.gz"
+let hasRussianList = FileManager.default.fileExists(atPath: russianListPath)
+
+let englishWords = loadWords("\(resources)/en.txt.gz")
+let russianWords = hasRussianList ? loadWords(russianListPath) : []
+let russianSet = russianListOverride != nil
+  ? HashedWordSet(words: russianWords)
+  : HashedWordSet(contentsOf: URL(fileURLWithPath: "\(resources)/ru-forms.bin"))!
+let russianTypoSet = russianListOverride != nil
+  ? russianSet
+  : HashedWordSet(contentsOf: URL(fileURLWithPath: "\(resources)/ru-typo.bin"))!
+LayoutDictionary.shared.setForTests(Set(englishWords), russianSet, typo: russianTypoSet)
 
 var failures = 0
 func check(_ passed: Bool, _ message: String) {
@@ -239,11 +254,35 @@ for (typed, layout) in punctuationWords {
 }
 check(!AutoSwitchEngine.looksLikeCodeOrAddress("GHbdtn"), "sticky Shift on Привет is not camelCase")
 
+// MARK: - Inflected forms
+
+print("=== inflected Russian forms typed on the EN layout")
+// Cases, numbers, genders, conjugations, participles and both spellings of ё.
+// Includes neologisms that only the supplement's generated paradigms provide.
+let inflectedForms = [
+  "бизнесменами", "закоммитил", "зарелизили", "отрефакторенный", "созвонимся",
+  "переиспользовать", "компаниями", "написанного", "сделаешь", "красивейших",
+  "пошёл", "пошел", "закоммитили", "зарелизит", "переиспользованного",
+  "разработчикам", "обновлённый", "самыми", "считающихся",
+]
+for word in inflectedForms {
+  let typed = AutoSwitchEngine.convert(word, to: .english)
+  check(AutoSwitchEngine.evaluate(word: typed, currentLayout: .english) == .switchLayout,
+        "\(word) typed as \(typed) must switch")
+  check(AutoSwitchEngine.convert(typed, to: .russian) == word,
+        "\(typed) must convert back to \(word)")
+  check(AutoSwitchEngine.evaluate(word: word, currentLayout: .russian) == .keep,
+        "\(word) typed correctly must be kept")
+}
+
 // MARK: - Full sweep
 
 print("=== full dictionary sweep")
 let englishFalsePositives = englishWords.filter {
   AutoSwitchEngine.evaluate(word: $0, currentLayout: .english) == .switchLayout
+}
+if !hasRussianList {
+  print("  WARNING: \(russianListPath) is missing; the Russian sweeps are skipped. Run scripts/build_dictionaries.sh.")
 }
 let russianFalsePositives = russianWords.filter {
   AutoSwitchEngine.evaluate(word: $0, currentLayout: .russian) == .switchLayout
@@ -309,8 +348,15 @@ for word in englishWords where word.count >= LayoutDictionary.minimumTypoLength 
     englishTypoFalsePositives.append(word)
   }
 }
+// The full Russian list is 3 M forms and each needs ~200 probes of the English
+// set, which takes minutes. Every 16th form is a deterministic, unbiased sample
+// (the list is sorted); BABBLER_FULL_SWEEP=1 runs all of them.
+let sweepStride = ProcessInfo.processInfo.environment["BABBLER_FULL_SWEEP"] == nil ? 16 : 1
 var russianTypoFalsePositives: [String] = []
-for word in russianWords where word.count >= LayoutDictionary.minimumTypoLength {
+var russianLong = 0
+for word in russianWords.enumerated().lazy.filter({ $0.offset % sweepStride == 0 }).map({ $0.element })
+where word.count >= LayoutDictionary.minimumTypoLength {
+  russianLong += 1
   let converted = AutoSwitchEngine.convert(word, to: .english)
   guard !LayoutDictionary.shared.contains(converted, in: .english) else { continue }
   if LayoutDictionary.shared.hasWordOneInsertionAway(converted, in: .english) {
@@ -318,9 +364,8 @@ for word in russianWords where word.count >= LayoutDictionary.minimumTypoLength 
   }
 }
 let englishLong = englishWords.filter { $0.count >= LayoutDictionary.minimumTypoLength }.count
-let russianLong = russianWords.filter { $0.count >= LayoutDictionary.minimumTypoLength }.count
 let englishRate = Double(englishTypoFalsePositives.count) * 100 / Double(englishLong)
-let russianRate = Double(russianTypoFalsePositives.count) * 100 / Double(russianLong)
+let russianRate = russianLong == 0 ? 0 : Double(russianTypoFalsePositives.count) * 100 / Double(russianLong)
 print(String(format: "  EN %d/%d = %.4f%%, RU %d/%d = %.4f%%",
              englishTypoFalsePositives.count, englishLong, englishRate,
              russianTypoFalsePositives.count, russianLong, russianRate))
@@ -328,6 +373,33 @@ print(String(format: "  EN %d/%d = %.4f%%, RU %d/%d = %.4f%%",
 // fail loudly if a change makes typo matching an order of magnitude looser.
 check(englishRate < 0.05, "English typo false-positive rate \(englishRate)% exceeds budget")
 check(russianRate < 0.05, "Russian typo false-positive rate \(russianRate)% exceeds budget")
+
+// MARK: - Out-of-vocabulary English
+
+print("=== out-of-vocabulary English typed correctly")
+// Words the raw spellcheck list has but the bundled English list left out
+// (names, rarities). They are not protected by the "already a word here" rule,
+// so this measures how often a rare Russian form collides with their keys.
+let rawEnglishPath = cacheDirectory + "/en_words.txt"
+if let raw = try? String(contentsOfFile: rawEnglishPath, encoding: .utf8) {
+  let known = Set(englishWords)
+  var total = 0
+  var misfires: [String] = []
+  raw.enumerateLines { line, _ in
+    let word = line.trimmingCharacters(in: .whitespaces).lowercased()
+    guard word.count >= 3, !known.contains(word) else { return }
+    total += 1
+    if AutoSwitchEngine.evaluate(word: word, currentLayout: .english) == .switchLayout {
+      misfires.append(word)
+    }
+  }
+  let rate = total == 0 ? 0 : Double(misfires.count) * 100 / Double(total)
+  print(String(format: "  %d/%d = %.4f%%  e.g. %@", misfires.count, total, rate,
+               misfires.prefix(8).joined(separator: " ")))
+  check(rate < 0.1, "out-of-vocabulary English misfire rate \(rate)% exceeds budget")
+} else {
+  print("  WARNING: \(rawEnglishPath) is missing; skipped. Run scripts/build_dictionaries.sh.")
+}
 
 // MARK: - Learning from rejected corrections
 

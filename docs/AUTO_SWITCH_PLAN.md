@@ -55,7 +55,7 @@ exactly like a manual action-key press, including the watchdogs.
 - Russian: OpenCorpora or `hunspell-ru` lemma list, ~150k forms.
 
 **Format** — plain UTF-8, one lowercase word per line, sorted, gzipped in the
-app bundle (`en.txt.gz`, `ru.txt.gz`, ~1.5 MB total compressed).
+app bundle (`en.txt.gz`, `ru-forms.bin`, `ru-typo.bin`; see DICTIONARY.md).
 
 **Loading** — lazily on first use, off the main thread, into two
 `Set<String>` for O(1) lookup. ~10–15 MB resident, ~150 ms to parse. Acceptable
