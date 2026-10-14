@@ -64,52 +64,9 @@ echo "Ad-hoc signing the app..."
 codesign --force --deep --sign - "$STAGING_DIR/Babbler.app"
 ln -s /Applications "$STAGING_DIR/Applications"
 
-# Write README.txt
-cat > "$README_PATH" << 'EOF'
-Installation on another Mac
-
-To install Babbler from this DMG:
-
-1. Drag Babbler.app into Applications folder.
-
-2. First launch: app is not notarized → Gatekeeper may block it.
-   Fix: right-click Babbler.app → Open → Open
-   OR: xattr -dr com.apple.quarantine /Applications/Babbler.app
-   macOS 15+: System Settings → Privacy & Security → "Open Anyway"
-
-3. Grant permissions: quit Babbler, then open System Settings →
-   Privacy & Security → Accessibility AND Input Monitoring →
-   enable Babbler. Relaunch Babbler.
-
-4. After updating to a new build, permissions must be re-granted
-   (remove old Babbler entry with "–" and add again), because the
-   ad-hoc signature changes.
-
-5. Optional: enable Launch at Login in Babbler settings.
-
----
-
-Установка на другом Mac
-
-Для установки Babbler из этого DMG:
-
-1. Перетащите Babbler.app в папку Applications.
-
-2. При первом запуске: приложение не нотаризировано → Gatekeeper может
-   заблокировать. Решение: правый клик по Babbler.app → Open → Open
-   ИЛИ: xattr -dr com.apple.quarantine /Applications/Babbler.app
-   macOS 15+: System Settings → Privacy & Security → "Open Anyway"
-
-3. Выдайте разрешения: закройте Babbler, затем откройте System Settings →
-   Privacy & Security → Accessibility И Input Monitoring →
-   включите Babbler. Перезапустите Babbler.
-
-4. При обновлении на новую сборку разрешения нужно выдать заново
-   (удалите старую запись Babbler и добавьте её снова), так как
-   ad-hoc подпись изменяется.
-
-5. Опционально: включите Launch at Login в настройках Babbler.
-EOF
+cp "$PROJECT_ROOT/scripts/dmg_install.command" "$STAGING_DIR/Install Babbler.command"
+chmod +x "$STAGING_DIR/Install Babbler.command"
+cp "$PROJECT_ROOT/scripts/dmg_README.txt" "$README_PATH"
 
 # Step 4: Create DMG
 echo "Creating DMG..."
@@ -122,6 +79,7 @@ hdiutil create \
 
 # Step 5: Cleanup staging
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$STAGING_DIR/Babbler.app" 2>/dev/null || true
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$APP_PATH" 2>/dev/null || true
 rm -rf "$STAGING_DIR"
 
 # Step 6: Report results
