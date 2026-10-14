@@ -39,11 +39,19 @@ enum MenuBarIconStyle: String, CaseIterable, Identifiable {
     }
 }
 
-/// Apps where an automatic rewrite is more likely to be wrong than right.
+/// Apps where an automatic rewrite is more likely to be wrong than right:
+/// terminals, IDEs, and password managers.
+///
+/// This lives here, not in AutoSwitchAppProfiles.swift, so PreferenceStore.swift
+/// keeps compiling on its own: the harness scripts under tests/ compile it
+/// standalone, without that file. AutoSwitchAppProfiles.defaultExcludedBundleIds
+/// is a thin wrapper around this list, so the two never drift apart.
 let autoSwitchDefaultExcludedApps = [
   "com.apple.Terminal",
   "com.googlecode.iterm2",
   "dev.warp.Warp-Stable",
+  "net.kovidgoyal.kitty",
+  "com.github.wez.wezterm",
   "com.apple.dt.Xcode",
   "com.microsoft.VSCode",
   "com.jetbrains.intellij",
@@ -167,6 +175,14 @@ class PreferenceStore {
 
     func setAutoSwitchExcludedApps(_ apps: Set<String>) {
         defaults.set(Array(apps), forKey: autoSwitchExcludedAppsKey)
+    }
+
+    /// Whether the user has ever customized the excluded-apps list, as an
+    /// override for `bundleId` to hand to `AutoSwitchAppProfiles`. nil when the
+    /// list has never been customized, so the built-in defaults apply.
+    func autoSwitchOverride(for bundleId: String) -> Bool? {
+        guard let stored = defaults.stringArray(forKey: autoSwitchExcludedAppsKey) else { return nil }
+        return !stored.contains(bundleId)
     }
 
     /// Legacy storage: words blocked before rejection counts existed. Read once

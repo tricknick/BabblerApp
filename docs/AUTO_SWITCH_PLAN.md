@@ -220,3 +220,30 @@ Realistic non-words — `kubernetes`, `nginx`, `qwerty`, `asdf`, `github`,
 option and the excluded-apps editor UI. The exclusion list itself works and
 ships with a sensible default (Terminal, iTerm, Warp, Xcode, VS Code, IntelliJ,
 1Password); it is editable via `defaults write eugene.Babbler autoSwitchExcludedApps`.
+
+**Sentence context.** `SentenceContext` (`SentenceContext.swift`) tracks the
+layout of recently committed words — `prior` is the majority layout of the
+last up-to-3 words, `strength` is how many of the most recent words in a row
+share that layout. `AppDelegate` keeps one instance, `note`s every committed
+word in its final layout (after an auto-switch, or after a manual swap), and
+`reset`s it on active-app change, Enter/Tab, and mouse clicks. A snapshot
+(`SentenceContextSnapshot`, defined in `AutoSwitchEngine.swift` so the type is
+available wherever `evaluate`/`matchTier` are compiled standalone) is passed
+into `AutoSwitchEngine.evaluate(word:currentLayout:context:)`: when `prior`
+agrees with the layout a word would switch *to*, the n-gram margin is relaxed
+(×0.6); when `prior` instead agrees with the *current* layout and `strength`
+is ≥ 3, both the typo and n-gram tiers are skipped — recent context is strong
+enough evidence that the current layout is intentional. The exact/pack/lexicon
+tiers are unaffected by context. `context` defaults to `nil`, which reproduces
+the pre-context behavior exactly.
+
+**Per-app profiles.** `AutoSwitchAppProfiles.swift` adds prefix-based exclusion
+(`com.jetbrains.*`, for every JetBrains IDE) on top of the exact-match default
+list, via `isAutoSwitchAllowed(bundleId:userOverrides:)`. `PreferenceStore`'s
+`autoSwitchDefaultExcludedApps` is still the single literal source of the
+default id list — kept there, not in `AutoSwitchAppProfiles.swift`, purely so
+`PreferenceStore.swift` keeps compiling standalone in the older test harnesses
+that don't copy the new files; `AutoSwitchAppProfiles.defaultExcludedBundleIds`
+is a thin `Set(...)` wrapper around that same list. `AppDelegate`'s
+`isAutoSwitchAllowedInCurrentApp` now delegates to
+`AutoSwitchAppProfiles.isAutoSwitchAllowed`.

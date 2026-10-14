@@ -20,6 +20,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     // so isWaitingForSwitch can never latch on and permanently disable event handling.
     var switchWatchdog: Timer?
 
+    // Layout of recent committed words, used to relax or hold back auto-switch
+    // tiers that judge a single word in isolation. Reset alongside the other
+    // auto-switch learning state: see resetAutoSwitchLearningContext.
+    let sentenceContext = SentenceContext()
+
     // Keycodes of the current word; resets on word break (space → new char) or cancel.
     var wordRecord: [RecordedKey] = []
     // Keycodes since the last hard cancel (escape, enter, arrow, click, app change); spans multiple words.
@@ -278,6 +283,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
       let word = AutoSwitchEngine.normalize(String(piece))
       guard !word.isEmpty else { continue }
       userLexicon.forget(word: word, layout: layout)
+      // The swap already happened, so these words now stand in the other layout.
+      sentenceContext.note(word: word, finalLayout: layout.other)
     }
   }
 
@@ -301,10 +308,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     private func isAutoSwitchAllowedInCurrentApp() -> Bool {
-        guard let bundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else {
-            return false
+        let bundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        var overrides: [String: Bool] = [:]
+        if let bundleId, let override = preferenceStore.autoSwitchOverride(for: bundleId) {
+            overrides[bundleId] = override
         }
-        return !preferenceStore.getAutoSwitchExcludedApps().contains(bundleId)
+        return AutoSwitchAppProfiles.isAutoSwitchAllowed(bundleId: bundleId, userOverrides: overrides)
     }
 
     /// A key that ends a word, so the word before it can now be judged.
@@ -343,17 +352,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
               let layout = currentLayout,
               isAutoSwitchAllowedInCurrentApp() else {
             rememberTypedWord(record, word)
+            if !word.isEmpty, let layout = currentLayout {
+                sentenceContext.note(word: word, finalLayout: layout)
+            }
             return false
         }
 
         let normalized = AutoSwitchEngine.normalize(word)
         guard !autoSwitchMemory.shouldSkip(word: normalized),
-              let engineTier = AutoSwitchEngine.matchTier(word: word, currentLayout: layout) else {
+              let engineTier = AutoSwitchEngine.matchTier(
+                word: word, currentLayout: layout, context: sentenceContext.snapshot
+              ) else {
             rememberTypedWord(record, word)
             // Auto-switch looked at this word and left it alone: a candidate
             // for the lexicon, since a word it does switch is either wrong or
             // already handled below.
             noteKeptWord(normalized, layout: layout)
+            sentenceContext.note(word: normalized, finalLayout: layout)
             return false
         }
 
@@ -375,6 +390,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         autoSwitchMemory.noteCorrection(word: normalized)
         layoutBeforeAutoSwitch = layout
         scheduleAutoSwitchSettle()
+        // The word is being rewritten into the other layout, so that is where it ends up.
+        sentenceContext.note(word: normalized, finalLayout: layout.other)
 
         // Leave the corrected run in wordRecord so pressing the action key right
         // after undoes it. The next typed character clears it as usual, because
@@ -429,6 +446,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         autoSwitchSettleTimer?.invalidate()
         autoSwitchSettleTimer = nil
         autoSwitchMemory.noteContextChanged()
+        sentenceContext.reset()
     }
 
     /// The action key pressed just after an automatic correction means the user
@@ -476,6 +494,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // Count Backspace once per keypress, including repeats.
         let isDelete = code == Key.delete && event.type == .keyDown
         let isRecordCanceled = code == Key.escape || code == Key.tab || isArrow || isEnter || isLeftMouseDown
+
+        // Enter/Tab end the sentence; a click moves focus elsewhere. Either way
+        // the words that follow are not a continuation of what came before.
+        if isEnter || code == Key.tab || isLeftMouseDown {
+            sentenceContext.reset()
+        }
 
         // checkActionKeyPress is stateful — call once only
         let actionResult = KeyboardUtils.checkActionKeyPress(code, flags)

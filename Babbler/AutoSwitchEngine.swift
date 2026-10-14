@@ -1,5 +1,16 @@
 import Foundation
 
+/// Immutable snapshot of a `SentenceContext` (SentenceContext.swift) at one
+/// moment, handed to `AutoSwitchEngine.evaluate`/`matchTier` as a cheap,
+/// thread-safe value. Declared here rather than alongside the class so this
+/// file — and the test harnesses that compile it standalone — never need to
+/// pull in SentenceContext.swift just to spell the type of an optional,
+/// always-nil-by-default parameter.
+struct SentenceContextSnapshot: Equatable {
+  let prior: Layout
+  let strength: Int
+}
+
 /// Decides whether a word that was just typed should be rewritten in the other
 /// keyboard layout.
 ///
@@ -50,17 +61,26 @@ enum AutoSwitchEngine {
   static func evaluate(
     word rawWord: String,
     currentLayout: Layout,
+    context: SentenceContextSnapshot? = nil,
     dictionary: LayoutDictionary = .shared
   ) -> Decision {
-    matchTier(word: rawWord, currentLayout: currentLayout, dictionary: dictionary) == nil
+    matchTier(word: rawWord, currentLayout: currentLayout, context: context, dictionary: dictionary) == nil
       ? .keep
       : .switchLayout
   }
 
   /// The tier that would switch `rawWord`, or nil if it is left alone.
+  ///
+  /// `context` is the sentence context at the moment this word is judged, or
+  /// nil for the plain per-word decision. It only touches the bottom two
+  /// tiers: a target-layout context relaxes the n-gram margin, and a strong
+  /// current-layout context disables both the n-gram and typo tiers outright.
+  /// Exact, pack, and user-lexicon hits are confident enough that context
+  /// cannot override them either way.
   static func matchTier(
     word rawWord: String,
     currentLayout: Layout,
+    context: SentenceContextSnapshot? = nil,
     dictionary: LayoutDictionary = .shared
   ) -> Tier? {
     guard dictionary.isReady else { return nil }
@@ -103,6 +123,14 @@ enum AutoSwitchEngine {
 
     if dictionary.contains(converted, in: currentLayout.other) { return .exact }
 
+    // A sentence firmly anchored in the current layout (three or more words
+    // running) is strong enough evidence on its own that the bottom two tiers,
+    // which are the ones prone to misreading a real word in this layout as a
+    // mistyped one in the other, are held back entirely.
+    if contextStronglyFavorsCurrentLayout(context, currentLayout: currentLayout) {
+      return nil
+    }
+
     // Last resort: the user typed a real word in the other layout but missed a
     // keystroke, so "ghdtn" is "првет" — obviously Russian, but not a word.
     //
@@ -120,11 +148,37 @@ enum AutoSwitchEngine {
     // which language the letters look like.
     if let score = languageModelScore(
       typed: word, converted: converted, currentLayout: currentLayout, dictionary: dictionary
-    ), score.passes {
+    ), languageModelScorePasses(score, context: context, currentLayout: currentLayout) {
       return .languageModel
     }
 
     return nil
+  }
+
+  /// Three or more trailing words already committed to `currentLayout` is
+  /// strong enough evidence that the n-gram and typo tiers are held back:
+  /// at that point a lone odd-looking word is far more likely to be a brand,
+  /// a name, or slang than a layout mistake.
+  private static func contextStronglyFavorsCurrentLayout(
+    _ context: SentenceContextSnapshot?, currentLayout: Layout
+  ) -> Bool {
+    guard let context else { return false }
+    return context.prior == currentLayout && context.strength >= 3
+  }
+
+  /// Whether a language-model score clears the bar to switch, given the
+  /// sentence context. A context anchored in the target layout relaxes the
+  /// margin a conversion must beat the typed text by: the threshold used at
+  /// nil context already keeps false positives rare, so this only needs to
+  /// forgive borderline cases sentence-level evidence already supports.
+  private static func languageModelScorePasses(
+    _ score: LanguageModelScore, context: SentenceContextSnapshot?, currentLayout: Layout
+  ) -> Bool {
+    var threshold = languageModelMargin(forLength: score.length)
+    if let context, context.prior == currentLayout.other {
+      threshold *= 0.6
+    }
+    return score.margin >= threshold && score.plausibility >= languageModelFloor(for: score.target)
   }
 
   /// The language-model evidence for switching a token.
