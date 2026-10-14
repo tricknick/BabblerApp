@@ -6,11 +6,12 @@ Babbler — установка / обновление
       Конфиденциальность и безопасность → "Всё равно открыть".)
   2. Скрипт сам: закроет запущенный Babbler, заменит
      /Applications/Babbler.app, снимет карантин, уберёт лишние копии
-     из LaunchServices и сбросит старые разрешения (у каждой сборки
-     новая подпись — старые разрешения к ней не подходят).
-  3. Включите Babbler в Конфиденциальность и безопасность →
-     Универсальный доступ (Accessibility) и Мониторинг ввода
-     (Input Monitoring). Перезапустите Babbler.
+     из LaunchServices. Разрешения сбрасываются только если подпись
+     изменилась; обновления с той же подписью сохраняют их.
+  3. Если Babbler не работает: включите его в Конфиденциальность и
+     безопасность → Универсальный доступ (Accessibility) и Мониторинг
+     ввода (Input Monitoring). Перезапустите Babbler.
+     На новом Mac разрешения нужно выдать один раз.
 
 Вручную (без скрипта):
   - Закройте Babbler, перетащите Babbler.app в Applications (заменить).
@@ -25,6 +26,6 @@ Babbler — установка / обновление
 
 ---
 English: right-click "Install Babbler.command" → Open. It quits Babbler,
-replaces /Applications/Babbler.app, clears quarantine and stale
-permission grants. Then enable Babbler in Accessibility and Input
-Monitoring and relaunch it.
+replaces /Applications/Babbler.app and clears quarantine. Permission grants
+are reset only if the code signature changed. On a new Mac, enable Babbler in
+Accessibility and Input Monitoring once, then relaunch it.

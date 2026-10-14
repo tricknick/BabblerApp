@@ -54,14 +54,14 @@ if [[ ! -d "$APP_PATH" ]]; then
   exit 1
 fi
 
-# Step 2: Stage and ad-hoc sign the staged copy (never the build copy, so it can't be
+# Step 2: Stage and sign the staged copy (never the build copy, so it can't be
 # confused with the installed app by LaunchServices / TCC)
 echo "Staging DMG contents..."
 rm -rf "$STAGING_DIR"
 mkdir -p "$STAGING_DIR"
 ditto "$APP_PATH" "$STAGING_DIR/Babbler.app"
-echo "Ad-hoc signing the app..."
-codesign --force --deep --sign - "$STAGING_DIR/Babbler.app"
+echo "Signing the app..."
+"$PROJECT_ROOT/scripts/sign_app.sh" "$STAGING_DIR/Babbler.app"
 ln -s /Applications "$STAGING_DIR/Applications"
 
 cp "$PROJECT_ROOT/scripts/dmg_install.command" "$STAGING_DIR/Install Babbler.command"

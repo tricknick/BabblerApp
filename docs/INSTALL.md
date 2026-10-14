@@ -6,8 +6,20 @@
 ./scripts/install.sh
 ```
 
-Builds Release with ad-hoc signing, replaces `/Applications/Babbler.app`, and
-relaunches.
+Builds Release, signs it with the local signing identity, replaces
+`/Applications/Babbler.app`, and relaunches.
+
+### One-time signing setup
+
+```sh
+./scripts/setup_signing.sh
+```
+
+Creates a self-signed code-signing identity, "Babbler Local Signing", in the login
+keychain. Run it once per Mac; re-running is harmless. Without it, builds fall back
+to ad-hoc signing and macOS drops Accessibility / Input Monitoring grants on every
+update. With it, grants persist across updates because the signature stays the same.
+On a new Mac, the first install still needs the permissions granted once.
 
 ## Build and distribute a DMG
 
@@ -18,16 +30,17 @@ To create a distributable DMG for another Mac:
 ```
 
 This produces `dist/Babbler-<VERSION>.dmg` containing:
-- `Babbler.app` (ad-hoc signed)
+- `Babbler.app` (signed with the local signing identity; see above)
 - `Install Babbler.command` — installer for first install **and** updates over an existing copy
 - `Applications/` symlink
 - `README.txt` (instructions, Russian + English)
 
 `Install Babbler.command` (source: `scripts/dmg_install.command`) quits the running
 Babbler, replaces `/Applications/Babbler.app`, clears quarantine, unregisters the
-DMG copy from LaunchServices, resets the stale Accessibility / Input Monitoring
-grants (`tccutil reset … eugene.Babbler`) and launches the new app. The user then
-only enables Babbler in both lists and relaunches it.
+DMG copy from LaunchServices, and launches the new app. It resets the Accessibility /
+Input Monitoring grants (`tccutil reset … eugene.Babbler`) only when the code signature
+changed (for example, the first update from an ad-hoc build). Updates signed by the same
+identity keep their grants. The user then only enables Babbler in both lists and relaunches it.
 
 ## Install a prebuilt archive on another Mac
 
@@ -63,15 +76,13 @@ confusing half-working state.
 
 The app prompts for whichever is missing on launch.
 
-### After every rebuild — re-grant both
+### Without the signing identity — re-grant after every rebuild
 
-The project is signed **ad hoc** (`CODE_SIGN_IDENTITY="-"`), because the
-original team certificate `S6G53UGWX8` is not available. Every build produces a
-different code signature, and macOS ties TCC grants to the signature. An
-existing grant therefore goes stale and silently stops working even though the
-checkbox still looks ticked.
-
-After each reinstall, in **both** Input Monitoring and Accessibility:
+Builds are signed with the local "Babbler Local Signing" identity (run
+`./scripts/setup_signing.sh` once; see above). macOS ties TCC grants to the
+code's designated requirement, so grants survive updates signed by the same
+identity. If the identity is missing, builds fall back to ad-hoc signing, and
+grants must be re-added after each reinstall:
 
 1. Select Babbler
 2. Click **–** to remove it
