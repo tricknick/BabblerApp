@@ -56,10 +56,12 @@ struct SettingsView: View {
     @AppStorage(langSwitchKeyCodeKey) private var selectedSwitchKeyCodeRaw: Int = Int(Key.option)
     @AppStorage(menuBarIconStyleKey) private var menuBarIconStyle: MenuBarIconStyle = .flag
     @AppStorage(clipboardHistoryEnabledKey) private var clipboardHistoryEnabled: Bool = true
+    @AppStorage(autoSwitchEnabledKey) private var autoSwitchEnabled: Bool = false
     @State private var configuredApps: [AppListItem] = []
     @State private var globeSetupInstructions: [String] = []
     // Read from the system, not UserDefaults — the user can also remove Babbler in Login Items
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var learnedWords: [String] = []
 
     // Binding that bridges Int (AppStorage) ↔ UInt16 (Picker tags)
     private var switchKeyCodeBinding: Binding<UInt16> {
@@ -141,6 +143,38 @@ struct SettingsView: View {
                         .labelsHidden()
                         .toggleStyle(.switch)
                 }
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Switch layout automatically")
+                        Text("Corrects a word typed in the wrong layout as soon as you finish it. Press the action key right after to undo.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $autoSwitchEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+                if autoSwitchEnabled {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Learned exceptions")
+                            Text(learnedWords.isEmpty
+                                 ? "Words you undo three times are never corrected again."
+                                 : learnedWords.joined(separator: ", "))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                        Button("Forget") {
+                            autoSwitchMemory.forgetAll()
+                            learnedWords = []
+                        }
+                        .disabled(learnedWords.isEmpty)
+                    }
+                }
             }
 
             Section {
@@ -208,6 +242,12 @@ struct SettingsView: View {
         .onAppear {
             loadConfiguredApps()
             refreshGlobeSetupInstructions()
+            learnedWords = autoSwitchMemory.learnedWords
+        }
+        .onChange(of: autoSwitchEnabled) { _, newValue in
+            // Loading the word lists takes ~150 ms, so start as soon as it is enabled
+            // rather than on the first keystroke.
+            if newValue { LayoutDictionary.shared.preload() }
         }
     }
 

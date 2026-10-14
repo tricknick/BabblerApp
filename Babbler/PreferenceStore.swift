@@ -19,6 +19,11 @@ let menuBarIconStyleKey = "menuBarIconStyle"
 let isTextReplaceEnabledKey = "isTextReplaceEnabled"
 let clipboardHistoryEnabledKey = "clipboardHistoryEnabled"
 let pinnedClipboardItemsKey = "pinnedClipboardItems"
+let autoSwitchEnabledKey = "autoSwitchEnabled"
+let autoSwitchExcludedAppsKey = "autoSwitchExcludedApps"
+let autoSwitchIgnoredWordsKey = "autoSwitchIgnoredWords"
+let autoSwitchRejectionsKey = "autoSwitchRejections"
+let autoSwitchRejectionsMigratedKey = "autoSwitchRejectionsMigrated"
 
 enum MenuBarIconStyle: String, CaseIterable, Identifiable {
     case appIcon, langCode, flag
@@ -32,8 +37,20 @@ enum MenuBarIconStyle: String, CaseIterable, Identifiable {
     }
 }
 
+/// Apps where an automatic rewrite is more likely to be wrong than right.
+let autoSwitchDefaultExcludedApps = [
+  "com.apple.Terminal",
+  "com.googlecode.iterm2",
+  "dev.warp.Warp-Stable",
+  "com.apple.dt.Xcode",
+  "com.microsoft.VSCode",
+  "com.jetbrains.intellij",
+  "com.1password.1password",
+]
+
 class PreferenceStore {
-    private let defaults: UserDefaults
+    // Internal so AutoSwitchMemory.swift can extend the store without this file knowing its types
+    let defaults: UserDefaults
     private var appInputSources: [String: [String]]
     // Last language per app, kept in memory only: the window is short, so there's
     // nothing worth persisting (and no app-usage history left on disk)
@@ -128,6 +145,46 @@ class PreferenceStore {
 
     func setPinnedClipboardItems(_ items: Set<String>) {
         defaults.set(Array(items), forKey: pinnedClipboardItemsKey)
+    }
+
+    // Auto switch is opt-in: an upgrade must not silently start rewriting text.
+    func getAutoSwitchEnabled() -> Bool {
+        return defaults.bool(forKey: autoSwitchEnabledKey)
+    }
+
+    func setAutoSwitchEnabled(_ value: Bool) {
+        defaults.set(value, forKey: autoSwitchEnabledKey)
+    }
+
+    func getAutoSwitchExcludedApps() -> Set<String> {
+        guard let stored = defaults.stringArray(forKey: autoSwitchExcludedAppsKey) else {
+            return Set(autoSwitchDefaultExcludedApps)
+        }
+        return Set(stored)
+    }
+
+    func setAutoSwitchExcludedApps(_ apps: Set<String>) {
+        defaults.set(Array(apps), forKey: autoSwitchExcludedAppsKey)
+    }
+
+    /// Legacy storage: words blocked before rejection counts existed. Read once
+    /// by AutoSwitchMemory's migration and then left alone, so downgrading to an
+    /// earlier version does not lose them.
+    func getAutoSwitchIgnoredWords() -> Set<String> {
+        let array = defaults.stringArray(forKey: autoSwitchIgnoredWordsKey) ?? []
+        return Set(array)
+    }
+
+    func clearAutoSwitchIgnoredWords() {
+        defaults.removeObject(forKey: autoSwitchIgnoredWordsKey)
+    }
+
+    func didMigrateAutoSwitchRejections() -> Bool {
+        defaults.bool(forKey: autoSwitchRejectionsMigratedKey)
+    }
+
+    func setDidMigrateAutoSwitchRejections(_ value: Bool) {
+        defaults.set(value, forKey: autoSwitchRejectionsMigratedKey)
     }
 }
 
