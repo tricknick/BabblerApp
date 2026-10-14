@@ -9,6 +9,8 @@ CONFIGURATION="Release"
 DERIVED_DATA_PATH="$ROOT_DIR/build"
 APP_NAME="Babbler"
 INSTALL_DIR="/Applications"
+VERSION="$(git -C "$ROOT_DIR" describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null | sed 's/^v//')"
+VERSION="${VERSION:-0.0.0}"
 
 echo "==> Building $APP_NAME (Release, signed)..."
 
@@ -20,6 +22,7 @@ xcodebuild \
   CODE_SIGN_IDENTITY="-" \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGNING_ALLOWED=NO \
+  MARKETING_VERSION="$VERSION" \
   build 2>&1 | grep -E "^(Build |Compil|\*\*)" | tail -5
 
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/$APP_NAME.app"

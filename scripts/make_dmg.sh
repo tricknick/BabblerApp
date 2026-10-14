@@ -3,11 +3,12 @@ set -euo pipefail
 
 # Builds a Release DMG for Babbler
 # Usage: ./scripts/make_dmg.sh [VERSION] [--no-build]
-# VERSION: semantic version string (default: 1.7); can also be set via $VERSION env var
+# VERSION: semantic version string (default: latest git tag without "v"); can also be set via $VERSION env var
 # --no-build: skip xcodebuild, reuse existing build/Build/Products/Release/Babbler.app
 
 # Parse arguments (support any order)
-VERSION="${VERSION:-1.7}"
+VERSION="${VERSION:-$(git -C "$(dirname "$0")/.." describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null | sed 's/^v//')}"
+VERSION="${VERSION:-0.0.0}"
 NO_BUILD=0
 
 for arg in "$@"; do
@@ -46,6 +47,7 @@ if [[ $NO_BUILD -eq 0 ]]; then
     CODE_SIGN_IDENTITY="-" \
     CODE_SIGNING_REQUIRED=NO \
     CODE_SIGNING_ALLOWED=NO \
+    MARKETING_VERSION="$VERSION" \
     build 2>&1 | grep -E "^(BUILD|error:)" || true
 fi
 
@@ -60,6 +62,7 @@ echo "Staging DMG contents..."
 rm -rf "$STAGING_DIR"
 mkdir -p "$STAGING_DIR"
 ditto "$APP_PATH" "$STAGING_DIR/Babbler.app"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$STAGING_DIR/Babbler.app/Contents/Info.plist"
 echo "Signing the app..."
 "$PROJECT_ROOT/scripts/sign_app.sh" "$STAGING_DIR/Babbler.app"
 ln -s /Applications "$STAGING_DIR/Applications"
