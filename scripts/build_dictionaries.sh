@@ -181,6 +181,14 @@ fi
   --out-dir "$OUT_DIR" \
   --cache "$CACHE_DIR"
 
+# Theme packs: inflected forms of the lemma lists in scripts/packs/.
+echo "==> Building the theme packs..."
+"$VENV/bin/python" "$ROOT_DIR/scripts/build_theme_packs.py" \
+  --lemmas "$ROOT_DIR/scripts/packs" \
+  --out-dir "$OUT_DIR" \
+  --english "$OUT_DIR/en.txt.gz" \
+  --keys "$ROOT_DIR/Babbler/KeyDictionary.swift"
+
 # The character n-gram models trained on every word, which ship; and a second
 # pair trained without 10% of the words, which tests/run.sh scores honestly.
 echo "==> Training the character n-gram models..."

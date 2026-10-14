@@ -1,0 +1,41 @@
+# Required forms per theme pack, one "<pack id> <form>" per line.
+# Forms are lowercase Russian inflected forms that must be present in
+# Babbler/Resources/pack-<id>.txt.gz. Only forms of three or more letters, since
+# shorter words are never auto-switched.
+it задеплоил
+it задеплоили
+it пофиксила
+it багов
+it закоммитить
+it смержить
+it хотфикс
+it тикет
+it релизнуть
+it юзер
+business бизнесяки
+business дедлайна
+business апрув
+business заапрувить
+business митинг
+business созвон
+business фидбек
+business кейс
+business асап
+gaming катку
+gaming задонатил
+gaming нуб
+gaming лагать
+gaming имба
+gaming нерфы
+slang ништяк
+slang ваще
+slang вкусняшки
+slang вкусняшка
+slang тусню
+slang тусня
+slang кринжовый
+slang щас
+slang рофлить
+slang спс
+mat пздц
+mat нах

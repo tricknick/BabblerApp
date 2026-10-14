@@ -63,6 +63,19 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var learnedWords: [String] = []
 
+    @State private var enabledThemePacks: Set<String> = Set(ThemePacks.allIds)
+
+    private func themePackBinding(_ id: String) -> Binding<Bool> {
+        Binding(
+            get: { enabledThemePacks.contains(id) },
+            set: { isOn in
+                if isOn { enabledThemePacks.insert(id) } else { enabledThemePacks.remove(id) }
+                ThemePacks.saveEnabledIds(enabledThemePacks)
+                appDelegate.reloadThemePacks()
+            }
+        )
+    }
+
     // Binding that bridges Int (AppStorage) ↔ UInt16 (Picker tags)
     private var switchKeyCodeBinding: Binding<UInt16> {
         Binding(
@@ -177,6 +190,16 @@ struct SettingsView: View {
                 }
             }
 
+            if autoSwitchEnabled {
+                Section("Тематические словари") {
+                    Toggle("IT", isOn: themePackBinding("it"))
+                    Toggle("Бизнес", isOn: themePackBinding("business"))
+                    Toggle("Игры", isOn: themePackBinding("gaming"))
+                    Toggle("Сленг", isOn: themePackBinding("slang"))
+                    Toggle("Мат", isOn: themePackBinding("mat"))
+                }
+            }
+
             Section {
                 ScrollView {
                     if configuredApps.isEmpty {
@@ -243,6 +266,7 @@ struct SettingsView: View {
             loadConfiguredApps()
             refreshGlobeSetupInstructions()
             learnedWords = autoSwitchMemory.learnedWords
+            enabledThemePacks = ThemePacks.enabledIds()
         }
         .onChange(of: autoSwitchEnabled) { _, newValue in
             // Loading the word lists takes ~150 ms, so start as soon as it is enabled

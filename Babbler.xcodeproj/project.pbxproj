@@ -36,6 +36,12 @@
 	BB200000064F00000100AA01 /* ngram-ru.bin in Resources */ = {isa = PBXBuildFile; fileRef = BB100000064F00000100AA01 /* ngram-ru.bin */; };
 	BB200000065F00000100AA01 /* ngram-en.bin in Resources */ = {isa = PBXBuildFile; fileRef = BB100000065F00000100AA01 /* ngram-en.bin */; };
 		BB2000000523F00001AA01 /* AutoSwitchMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000523F00001AA01 /* AutoSwitchMemory.swift */; };
+		BB2000000A0F00000100AA01 /* ThemePacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000A0F00000100AA01 /* ThemePacks.swift */; };
+		BB2000000B0F00000100AA01 /* pack-it.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000B0F00000100AA01 /* pack-it.txt.gz */; };
+		BB2000000C0F00000100AA01 /* pack-business.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000C0F00000100AA01 /* pack-business.txt.gz */; };
+		BB2000000D0F00000100AA01 /* pack-gaming.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000D0F00000100AA01 /* pack-gaming.txt.gz */; };
+		BB2000000E0F00000100AA01 /* pack-slang.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000E0F00000100AA01 /* pack-slang.txt.gz */; };
+		BB2000000F0F00000100AA01 /* pack-mat.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000F0F00000100AA01 /* pack-mat.txt.gz */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -77,6 +83,12 @@
 	BB100000064F00000100AA01 /* ngram-ru.bin */ = {isa = PBXFileReference; lastKnownFileType = file; name = "ngram-ru.bin"; path = "Resources/ngram-ru.bin"; sourceTree = "<group>"; };
 	BB100000065F00000100AA01 /* ngram-en.bin */ = {isa = PBXFileReference; lastKnownFileType = file; name = "ngram-en.bin"; path = "Resources/ngram-en.bin"; sourceTree = "<group>"; };
 		BB1000000523F00001AA01 /* AutoSwitchMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSwitchMemory.swift; sourceTree = "<group>"; };
+		BB1000000A0F00000100AA01 /* ThemePacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePacks.swift; sourceTree = "<group>"; };
+		BB1000000B0F00000100AA01 /* pack-it.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-it.txt.gz"; path = "Resources/pack-it.txt.gz"; sourceTree = "<group>"; };
+		BB1000000C0F00000100AA01 /* pack-business.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-business.txt.gz"; path = "Resources/pack-business.txt.gz"; sourceTree = "<group>"; };
+		BB1000000D0F00000100AA01 /* pack-gaming.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-gaming.txt.gz"; path = "Resources/pack-gaming.txt.gz"; sourceTree = "<group>"; };
+		BB1000000E0F00000100AA01 /* pack-slang.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-slang.txt.gz"; path = "Resources/pack-slang.txt.gz"; sourceTree = "<group>"; };
+		BB1000000F0F00000100AA01 /* pack-mat.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-mat.txt.gz"; path = "Resources/pack-mat.txt.gz"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -168,7 +180,13 @@
 				BB100000042F00000100AA01 /* ru-forms.bin */,
 				BB100000052F00000100AA01 /* ru-typo.bin */,
 				BB100000063F00000100AA01 /* NGramModel.swift */,
+				BB1000000A0F00000100AA01 /* ThemePacks.swift */,
 				BB100000064F00000100AA01 /* ngram-ru.bin */,
+				BB1000000B0F00000100AA01 /* pack-it.txt.gz */,
+				BB1000000C0F00000100AA01 /* pack-business.txt.gz */,
+				BB1000000D0F00000100AA01 /* pack-gaming.txt.gz */,
+				BB1000000E0F00000100AA01 /* pack-slang.txt.gz */,
+				BB1000000F0F00000100AA01 /* pack-mat.txt.gz */,
 				BB100000065F00000100AA01 /* ngram-en.bin */,
 				7A765D8D25DF09F50076B974 /* StatusItemController.swift */,
 				7A765D9225E2D7170076B974 /* ImageUtils.swift */,
@@ -249,6 +267,11 @@
 				BB200000042F00000100AA01 /* ru-forms.bin in Resources */,
 				BB200000052F00000100AA01 /* ru-typo.bin in Resources */,
 				BB200000064F00000100AA01 /* ngram-ru.bin in Resources */,
+				BB2000000B0F00000100AA01 /* pack-it.txt.gz in Resources */,
+				BB2000000C0F00000100AA01 /* pack-business.txt.gz in Resources */,
+				BB2000000D0F00000100AA01 /* pack-gaming.txt.gz in Resources */,
+				BB2000000E0F00000100AA01 /* pack-slang.txt.gz in Resources */,
+				BB2000000F0F00000100AA01 /* pack-mat.txt.gz in Resources */,
 				BB200000065F00000100AA01 /* ngram-en.bin in Resources */,
 				7A765D9D25E7ABCE0076B974 /* SettingsViewController.xib in Resources */,
 				7AC0130B23A68C9A00FA3F07 /* Main.storyboard in Resources */,
@@ -274,6 +297,7 @@
 				BB200000012F00000100AA01 /* LayoutDictionary.swift in Sources */,
 				BB200000022F00000100AA01 /* AutoSwitchEngine.swift in Sources */,
 				BB200000063F00000100AA01 /* NGramModel.swift in Sources */,
+				BB2000000A0F00000100AA01 /* ThemePacks.swift in Sources */,
 				7A765D5F25D916460076B974 /* Key.swift in Sources */,
 				286A658A2F94003B00D25CBC /* MenuView.swift in Sources */,
 				286A658B2F94003B00D25CBC /* BabblerApp.swift in Sources */,

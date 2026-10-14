@@ -73,19 +73,23 @@ enum AutoSwitchEngine {
     // Already a real word where it stands — leave it alone.
     if dictionary.contains(word, in: currentLayout) { return nil }
 
-    // "it." is a real word plus a full stop; "ndj." is the Russian "твою". Tell
-    // them apart by asking whether dropping the trailing punctuation leaves a
-    // word in the layout the user is already using.
-    if hasAmbiguousTrailing(word), dictionary.contains(stem(of: word), in: currentLayout) {
-      return nil
-    }
-
     let converted = convert(word, to: currentLayout.other)
     guard converted != word else { return nil }
 
     // The candidate must be a plain run of letters in the target layout.
     // Anything else means these keys do not spell a word over there.
     guard converted.rangeOfCharacter(from: CharacterSet.letters.inverted) == nil else {
+      return nil
+    }
+
+    // Theme-pack forms are checked before the trailing-punctuation rule below:
+    // "ye," is the English "ye" plus a comma, but it types "нуб".
+    if isThemePackHit(converted, target: currentLayout.other) { return .exact }
+
+    // "it." is a real word plus a full stop; "ndj." is the Russian "твою". Tell
+    // them apart by asking whether dropping the trailing punctuation leaves a
+    // word in the layout the user is already using.
+    if hasAmbiguousTrailing(word), dictionary.contains(stem(of: word), in: currentLayout) {
       return nil
     }
 
@@ -198,7 +202,19 @@ enum AutoSwitchEngine {
     let trimmed = rawWord.trimmingCharacters(in: trimmableCharacters)
     guard !looksLikeCodeOrAddress(trimmed) else { return false }
     let word = trimmed.lowercased()
-    return dictionary.contains(convert(word, to: currentLayout.other), in: currentLayout.other)
+    let converted = convert(word, to: currentLayout.other)
+    return dictionary.contains(converted, in: currentLayout.other)
+      || isThemePackHit(converted, target: currentLayout.other)
+  }
+
+  /// Membership test for enabled theme-pack forms. Packs hold Russian forms only,
+  /// so this applies when the target is Russian. Set through `AutoSwitchEngine.themePacks`
+  /// (ThemePacks.swift); nil means no packs.
+  static var themePackContains: ((String) -> Bool)?
+
+  private static func isThemePackHit(_ converted: String, target: Layout) -> Bool {
+    guard target == .russian, let contains = themePackContains else { return false }
+    return contains(converted)
   }
 
   /// Whether a typed token is a URL, email, path, mention, hashtag, shell

@@ -101,6 +101,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         startPermissionPolling()
     }
 
+    /// Loads the theme packs enabled in preferences. Called at launch and whenever
+    /// the set of enabled packs changes.
+    func reloadThemePacks() {
+        guard let resourceDir = Bundle.main.resourceURL else { return }
+        AutoSwitchEngine.themePacks = ThemePacks.load(
+            ids: ThemePacks.enabledIds(), resourceDir: resourceDir
+        )
+    }
+
     func finishApplicationSetup() {
         if didFinishAppSetup { return }
         didFinishAppSetup = true
@@ -116,6 +125,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         if preferenceStore.getAutoSwitchEnabled() {
             LayoutDictionary.shared.preload()
         }
+        reloadThemePacks()
 
         InputSourceUtils.onKeyboardInputSourceChanged {
             let wasOurs = self.isWaitingForSwitch
