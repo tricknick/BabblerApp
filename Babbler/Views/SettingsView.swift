@@ -62,6 +62,8 @@ struct SettingsView: View {
     // Read from the system, not UserDefaults — the user can also remove Babbler in Login Items
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var learnedWords: [String] = []
+    @AppStorage(userLexiconEnabledKey) private var userLexiconEnabled: Bool = true
+    @State private var learnedLexiconCount: Int = 0
 
     @State private var enabledThemePacks: Set<String> = Set(ThemePacks.allIds)
 
@@ -187,6 +189,25 @@ struct SettingsView: View {
                         }
                         .disabled(learnedWords.isEmpty)
                     }
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Запоминать мои слова")
+                            Text(learnedLexiconCount == 0
+                                 ? "Слова, которые вы не исправляете дважды, больше не считаются опечаткой."
+                                 : "Выучено слов: \(learnedLexiconCount)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Сбросить") {
+                            userLexicon.reset()
+                            learnedLexiconCount = userLexicon.learnedCount
+                        }
+                        .disabled(learnedLexiconCount == 0)
+                        Toggle("", isOn: $userLexiconEnabled)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                    }
                 }
             }
 
@@ -267,11 +288,15 @@ struct SettingsView: View {
             refreshGlobeSetupInstructions()
             learnedWords = autoSwitchMemory.learnedWords
             enabledThemePacks = ThemePacks.enabledIds()
+            learnedLexiconCount = userLexicon.learnedCount
         }
         .onChange(of: autoSwitchEnabled) { _, newValue in
             // Loading the word lists takes ~150 ms, so start as soon as it is enabled
             // rather than on the first keystroke.
             if newValue { LayoutDictionary.shared.preload() }
+        }
+        .onChange(of: userLexiconEnabled) { _, _ in
+            appDelegate.reloadUserLexicon()
         }
     }
 

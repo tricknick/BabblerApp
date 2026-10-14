@@ -28,6 +28,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     var pendingRecord: [RecordedKey] = []
 
     var text: String = ""
+    // Typed characters since the last hard cancel, parallel to lineRecord.
+    var lineText: String = ""
 
     // Learns which words the user does not want corrected. Holds all the state
     // and window logic; AppDelegate only forwards events to it.
@@ -110,6 +112,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         )
     }
 
+    /// Applies the user-lexicon preference to the engine. Called at launch and
+    /// whenever the "Запоминать мои слова" setting changes, so toggling it off
+    /// stops the engine consulting learned words without discarding them.
+    func reloadUserLexicon() {
+        AutoSwitchEngine.userLexicon = UserLexicon.isEnabled() ? userLexicon : nil
+    }
+
+    /// Imports the system spelling file once per launch. Harmless to repeat:
+    /// `importSpelling` only adds words not already learned.
+    func importLocalSpellingDictionary() {
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Spelling/LocalDictionary")
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        userLexicon.importSpelling(from: url)
+    }
+
+    /// A word was committed as typed in `layout` — either auto-switch looked at
+    /// it and left it alone, or a correction was undone. Not worth storing if
+    /// it is already a word the built-in dictionaries know.
+    private func noteKeptWord(_ word: String, layout: Layout) {
+        guard UserLexicon.isEnabled(), !LayoutDictionary.shared.contains(word, in: layout) else {
+            return
+        }
+        userLexicon.noteKept(word: word, layout: layout)
+    }
+
     func finishApplicationSetup() {
         if didFinishAppSetup { return }
         didFinishAppSetup = true
@@ -126,6 +154,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             LayoutDictionary.shared.preload()
         }
         reloadThemePacks()
+        reloadUserLexicon()
+        importLocalSpellingDictionary()
+
+        // A correction the user undid means the word they originally typed was
+        // right where it stood — worth learning in its original layout.
+        autoSwitchMemory.onRejection = { [weak self] word in
+            guard let self, let layout = self.layoutBeforeAutoSwitch else { return }
+            self.noteKeptWord(word, layout: layout)
+        }
 
         InputSourceUtils.onKeyboardInputSourceChanged {
             let wasOurs = self.isWaitingForSwitch
@@ -166,6 +203,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
           self.activeAppInputSourceId = self.currentLang?.id
           self.wordRecord = []
           self.lineRecord = []
+          self.lineText = ""
           self.text = ""
           self.resetAutoSwitchBuffers()
         }
@@ -230,7 +268,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         switchWatchdog = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { _ in action() }
     }
 
-    func beginSwitch(_ record: [RecordedKey]) {
+    /// The user swapped these words by hand, so they are not words to keep.
+  /// Forgets each one in the layout it was typed in (the current layout,
+  /// read before the swap). Main thread only.
+  private func forgetManuallySwapped(_ typed: String) {
+    guard let layout = currentLayout else { return }
+    for piece in typed.split(whereSeparator: { $0.isWhitespace }) {
+      let word = AutoSwitchEngine.normalize(String(piece))
+      guard !word.isEmpty else { continue }
+      userLexicon.forget(word: word, layout: layout)
+    }
+  }
+
+  func beginSwitch(_ record: [RecordedKey]) {
         if preferenceStore.getIsTextReplaceEnabled() && !isSecurityInput {
             pendingRecord = record
             isWaitingForSwitch = true
@@ -299,6 +349,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         guard !autoSwitchMemory.shouldSkip(word: normalized),
               AutoSwitchEngine.evaluate(word: word, currentLayout: layout) == .switchLayout else {
             rememberTypedWord(record, word)
+            // Auto-switch looked at this word and left it alone: a candidate
+            // for the lexicon, since a word it does switch is either wrong or
+            // already handled below.
+            noteKeptWord(normalized, layout: layout)
             return false
         }
 
@@ -438,6 +492,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             // including when no text has been typed or selected.
             noteManualActionForUndo()
             resetAutoSwitchBuffers()
+            forgetManuallySwapped(actionResult == .lineAction ? lineText : text)
             beginSwitch(actionResult == .lineAction ? lineRecord : wordRecord)
             return
         case .none:
@@ -462,6 +517,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             || (withGlobe && code != Key.function) {
             wordRecord = []
             lineRecord = []
+            lineText = ""
             text = ""
             resetAutoSwitchBuffers()
             return
@@ -474,6 +530,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
         if isDelete && lineRecord.count > 0 {
             lineRecord.removeLast()
+            lineText = String(lineText.dropLast())
         }
         if isDelete && event.type == .keyDown {
             // Deleting after a correction means the user is reworking the text
@@ -504,6 +561,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             text = ""
             if appDidChange {
                 lineRecord = []
+                lineText = ""
                 resetAutoSwitchBuffers()
             }
         }
@@ -513,6 +571,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         wordRecord.append(entry)
         lineRecord.append(entry)
         text += event.characters ?? ""
+        lineText += event.characters ?? ""
 
         // The auto-switch buffer is word-delimited, so a terminator has already
         // been folded into the phrase tail by handleAutoSwitch and must not be

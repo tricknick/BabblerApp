@@ -69,6 +69,11 @@ final class AutoSwitchMemory {
   private var entries: [String: Entry]
   private var pending: PendingCorrection?
 
+  /// Called with a normalized word whenever a rejection is recorded — the user
+  /// undid our correction, so the word they originally typed was right where it
+  /// stood. AppDelegate uses this to feed the user lexicon; left nil in tests.
+  var onRejection: ((String) -> Void)?
+
   init(store: AutoSwitchMemoryStore) {
     self.store = store
     self.entries = store.getAutoSwitchRejections()
@@ -195,6 +200,7 @@ final class AutoSwitchMemory {
     pruneExpired(now: now)
     evictIfNeeded()
     store.setAutoSwitchRejections(entries)
+    onRejection?(word)
   }
 
   private func pruneExpired(now: Date) {

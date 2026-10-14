@@ -485,6 +485,40 @@ shorter than 2 letters, are dropped. Rebuild with:
 ./tests/packs_test.sh
 ```
 
+## User lexicon
+
+Separate from the rejection memory above: instead of learning *not to switch* a
+specific word, the user lexicon learns that a word is a real word in whatever
+layout the user keeps typing it in — useful for names, jargon and code identifiers
+that will never make it into the shared dictionaries.
+
+A word is **kept** once auto-switch looks at it and leaves it alone (it did not
+qualify for a switch), or once a switch is undone (the original layout was
+right). After the same word is kept twice (`promoteThreshold`), it is promoted
+into the learned set and from then on:
+
+- a lexicon hit in the layout the user is **currently** typing in behaves like an
+  existing dictionary word — auto-switch leaves it alone;
+- a lexicon hit in the **other** layout is treated as an exact match, the same
+  tier as a theme-pack or dictionary hit, and also qualifies for the backward
+  phrase sweep.
+
+Only words of 2+ letters with no digits or punctuation are considered, and
+words already present in the built-in EN/RU dictionaries are never stored —
+there is no point learning what the engine already knows. The learned set is
+capped at 5000 entries, oldest evicted first, and persisted under
+`userLexiconKeeps`/`userLexiconLearned`.
+
+At startup, `~/Library/Spelling/LocalDictionary` (macOS's own per-user spelling
+additions) is imported once: Cyrillic-only entries are learned as Russian,
+Latin-only entries as English. Toggle in Settings → «Запоминать мои слова»
+(shown when auto-switch is on), with a learned-word count and a reset button;
+the preference key is `userLexiconEnabled` (default on).
+
+The engine never references `UserLexicon` directly — like theme packs, it
+only holds a closure (`AutoSwitchEngine.userLexiconContains`) so that
+`AutoSwitchEngine.swift` compiles standalone without the lexicon present.
+
 ## Character n-gram language model (last tier)
 
 A lookup can never judge a word it has not seen: derived, colloquial and nonce

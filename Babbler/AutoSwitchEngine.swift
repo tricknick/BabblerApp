@@ -73,6 +73,10 @@ enum AutoSwitchEngine {
     // Already a real word where it stands — leave it alone.
     if dictionary.contains(word, in: currentLayout) { return nil }
 
+    // A word the user has typed and kept often enough in this layout to have
+    // learned — treat it the same as a dictionary word.
+    if isUserLexiconHit(word, target: currentLayout) { return nil }
+
     let converted = convert(word, to: currentLayout.other)
     guard converted != word else { return nil }
 
@@ -85,6 +89,10 @@ enum AutoSwitchEngine {
     // Theme-pack forms are checked before the trailing-punctuation rule below:
     // "ye," is the English "ye" plus a comma, but it types "нуб".
     if isThemePackHit(converted, target: currentLayout.other) { return .exact }
+
+    // Likewise a word the user has learned in the other layout: a confident
+    // user signal, not merely a dictionary match.
+    if isUserLexiconHit(converted, target: currentLayout.other) { return .exact }
 
     // "it." is a real word plus a full stop; "ndj." is the Russian "твою". Tell
     // them apart by asking whether dropping the trailing punctuation leaves a
@@ -205,6 +213,7 @@ enum AutoSwitchEngine {
     let converted = convert(word, to: currentLayout.other)
     return dictionary.contains(converted, in: currentLayout.other)
       || isThemePackHit(converted, target: currentLayout.other)
+      || isUserLexiconHit(converted, target: currentLayout.other)
   }
 
   /// Membership test for enabled theme-pack forms. Packs hold Russian forms only,
@@ -215,6 +224,15 @@ enum AutoSwitchEngine {
   private static func isThemePackHit(_ converted: String, target: Layout) -> Bool {
     guard target == .russian, let contains = themePackContains else { return false }
     return contains(converted)
+  }
+
+  /// Membership test for the user's learned lexicon in a given layout. Set
+  /// through `AutoSwitchEngine.userLexicon` (UserLexicon.swift); nil means no
+  /// lexicon, which keeps this file buildable without that one.
+  static var userLexiconContains: ((String, Layout) -> Bool)?
+
+  private static func isUserLexiconHit(_ word: String, target: Layout) -> Bool {
+    userLexiconContains?(word, target) ?? false
   }
 
   /// Whether a typed token is a URL, email, path, mention, hashtag, shell
@@ -300,6 +318,7 @@ enum AutoSwitchEngine {
       return false
     }
     return dictionary.contains(converted, in: currentLayout.other)
+      || isUserLexiconHit(converted, target: currentLayout.other)
   }
 
   /// Lowercased, edge-punctuation-free form used as the identity of a word for
