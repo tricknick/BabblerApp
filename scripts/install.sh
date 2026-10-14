@@ -33,7 +33,15 @@ echo "==> Stopping running $APP_NAME..."
 pkill -x "$APP_NAME" 2>/dev/null && sleep 1 || true
 
 echo "==> Installing to $INSTALL_DIR/$APP_NAME.app..."
-cp -R "$APP_PATH" "$INSTALL_DIR/"
+rm -rf "$INSTALL_DIR/$APP_NAME.app"
+ditto "$APP_PATH" "$INSTALL_DIR/$APP_NAME.app"
+# Seal the bundle so TCC (Accessibility / Input Monitoring) keys on a stable bundle signature
+codesign --force --deep --sign - "$INSTALL_DIR/$APP_NAME.app"
+
+# Keep LaunchServices from launching the build copy (different signature → permissions look missing)
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+"$LSREGISTER" -u "$APP_PATH" 2>/dev/null || true
+"$LSREGISTER" -f "$INSTALL_DIR/$APP_NAME.app" 2>/dev/null || true
 
 echo "==> Launching $APP_NAME..."
 open "$INSTALL_DIR/$APP_NAME.app"

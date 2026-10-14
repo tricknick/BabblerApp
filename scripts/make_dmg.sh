@@ -54,17 +54,14 @@ if [[ ! -d "$APP_PATH" ]]; then
   exit 1
 fi
 
-# Step 2: Ad-hoc sign the app
-echo "Ad-hoc signing the app..."
-codesign --force --deep --sign - "$APP_PATH"
-
-# Step 3: Create staging directory
+# Step 2: Stage and ad-hoc sign the staged copy (never the build copy, so it can't be
+# confused with the installed app by LaunchServices / TCC)
 echo "Staging DMG contents..."
 rm -rf "$STAGING_DIR"
 mkdir -p "$STAGING_DIR"
-
-# Copy app and create Applications symlink
-cp -R "$APP_PATH" "$STAGING_DIR/"
+ditto "$APP_PATH" "$STAGING_DIR/Babbler.app"
+echo "Ad-hoc signing the app..."
+codesign --force --deep --sign - "$STAGING_DIR/Babbler.app"
 ln -s /Applications "$STAGING_DIR/Applications"
 
 # Write README.txt
@@ -124,6 +121,7 @@ hdiutil create \
   "$DMG_PATH"
 
 # Step 5: Cleanup staging
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$STAGING_DIR/Babbler.app" 2>/dev/null || true
 rm -rf "$STAGING_DIR"
 
 # Step 6: Report results
