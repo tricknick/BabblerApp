@@ -37,7 +37,7 @@ PY
 
 cp "$ROOT_DIR/Babbler/AutoSwitchEngine.swift" "$ROOT_DIR/Babbler/KeyDictionary.swift" \
    "$ROOT_DIR/Babbler/AutoSwitchMemory.swift" "$ROOT_DIR/Babbler/PreferenceStore.swift" \
-   "$ROOT_DIR/Babbler/Key.swift" "$WORK_DIR/"
+   "$ROOT_DIR/Babbler/Key.swift" "$ROOT_DIR/Babbler/NGramModel.swift" "$WORK_DIR/"
 cp "$ROOT_DIR/tests/AutoSwitchTests.swift" "$WORK_DIR/main.swift"
 
 swiftc -O -o "$WORK_DIR/tests" \
@@ -47,6 +47,7 @@ swiftc -O -o "$WORK_DIR/tests" \
     "$WORK_DIR/KeyDictionary.swift" \
     "$WORK_DIR/AutoSwitchMemory.swift" \
     "$WORK_DIR/PreferenceStore.swift" \
-    "$WORK_DIR/Key.swift"
+    "$WORK_DIR/Key.swift" \
+    "$WORK_DIR/NGramModel.swift"
 
-BABBLER_RESOURCES="$ROOT_DIR/Babbler/Resources" "$WORK_DIR/tests"
+BABBLER_RESOURCES="$ROOT_DIR/Babbler/Resources" BABBLER_TEST_DATA="$ROOT_DIR/tests/data" "$WORK_DIR/tests"

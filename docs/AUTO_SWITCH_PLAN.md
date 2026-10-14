@@ -212,6 +212,8 @@ Two undos of the same word add it to a persistent ignore list.
 Realistic non-words — `kubernetes`, `nginx`, `qwerty`, `asdf`, `github`,
 `recieve`, `teh` — are all correctly left alone.
 
+**Tiers.** `AutoSwitchEngine.matchTier` tries, in order: exact dictionary match, typo match, then the **character n-gram language model** (`NGramModel.swift`, `ngram-ru.bin` / `ngram-en.bin`) for words in no dictionary. The model switches only when the converted word has ≥ 4 letters, its per-character log-likelihood in the target language beats the typed string's in the source language by a length-dependent margin (4 → 2.5, 5 → 2.0, 6-7 → 1.5, 8+ → 1.25) and is itself plausible (floor −4.5 RU / −3.5 EN). Only exact matches anchor the short-word phrase sweep. Learned rejections apply. Design, numbers and retraining: `docs/DICTIONARY.md`.
+
 **Code and address skip rules.** `AutoSwitchEngine.looksLikeCodeOrAddress` keeps tokens as typed when they look like URLs, emails, paths, hashtags/vars, `_`/`::`/`->`/`=>`, camelCase, or digit+letter mixes. Punctuation keys (`, . ; ' [ ] `` ` ``) never trigger it.
 
 **Not implemented** (deliberately deferred, as in "Out of scope"): the sound

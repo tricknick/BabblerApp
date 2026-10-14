@@ -32,6 +32,9 @@
 		BB200000032F00000100AA01 /* en.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB100000032F00000100AA01 /* en.txt.gz */; };
 		BB200000042F00000100AA01 /* ru-forms.bin in Resources */ = {isa = PBXBuildFile; fileRef = BB100000042F00000100AA01 /* ru-forms.bin */; };
 		BB200000052F00000100AA01 /* ru-typo.bin in Resources */ = {isa = PBXBuildFile; fileRef = BB100000052F00000100AA01 /* ru-typo.bin */; };
+	BB200000063F00000100AA01 /* NGramModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB100000063F00000100AA01 /* NGramModel.swift */; };
+	BB200000064F00000100AA01 /* ngram-ru.bin in Resources */ = {isa = PBXBuildFile; fileRef = BB100000064F00000100AA01 /* ngram-ru.bin */; };
+	BB200000065F00000100AA01 /* ngram-en.bin in Resources */ = {isa = PBXBuildFile; fileRef = BB100000065F00000100AA01 /* ngram-en.bin */; };
 		BB2000000523F00001AA01 /* AutoSwitchMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000523F00001AA01 /* AutoSwitchMemory.swift */; };
 /* End PBXBuildFile section */
 
@@ -70,6 +73,9 @@
 		BB100000032F00000100AA01 /* en.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = en.txt.gz; path = Resources/en.txt.gz; sourceTree = "<group>"; };
 		BB100000042F00000100AA01 /* ru-forms.bin */ = {isa = PBXFileReference; lastKnownFileType = file; name = "ru-forms.bin"; path = "Resources/ru-forms.bin"; sourceTree = "<group>"; };
 		BB100000052F00000100AA01 /* ru-typo.bin */ = {isa = PBXFileReference; lastKnownFileType = file; name = "ru-typo.bin"; path = "Resources/ru-typo.bin"; sourceTree = "<group>"; };
+	BB100000063F00000100AA01 /* NGramModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NGramModel.swift; sourceTree = "<group>"; };
+	BB100000064F00000100AA01 /* ngram-ru.bin */ = {isa = PBXFileReference; lastKnownFileType = file; name = "ngram-ru.bin"; path = "Resources/ngram-ru.bin"; sourceTree = "<group>"; };
+	BB100000065F00000100AA01 /* ngram-en.bin */ = {isa = PBXFileReference; lastKnownFileType = file; name = "ngram-en.bin"; path = "Resources/ngram-en.bin"; sourceTree = "<group>"; };
 		BB1000000523F00001AA01 /* AutoSwitchMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSwitchMemory.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -161,6 +167,9 @@
 				BB100000032F00000100AA01 /* en.txt.gz */,
 				BB100000042F00000100AA01 /* ru-forms.bin */,
 				BB100000052F00000100AA01 /* ru-typo.bin */,
+				BB100000063F00000100AA01 /* NGramModel.swift */,
+				BB100000064F00000100AA01 /* ngram-ru.bin */,
+				BB100000065F00000100AA01 /* ngram-en.bin */,
 				7A765D8D25DF09F50076B974 /* StatusItemController.swift */,
 				7A765D9225E2D7170076B974 /* ImageUtils.swift */,
 				7A765D9B25E7ABCE0076B974 /* SettingsViewController.xib */,
@@ -239,6 +248,8 @@
 				BB200000032F00000100AA01 /* en.txt.gz in Resources */,
 				BB200000042F00000100AA01 /* ru-forms.bin in Resources */,
 				BB200000052F00000100AA01 /* ru-typo.bin in Resources */,
+				BB200000064F00000100AA01 /* ngram-ru.bin in Resources */,
+				BB200000065F00000100AA01 /* ngram-en.bin in Resources */,
 				7A765D9D25E7ABCE0076B974 /* SettingsViewController.xib in Resources */,
 				7AC0130B23A68C9A00FA3F07 /* Main.storyboard in Resources */,
 			);
@@ -262,6 +273,7 @@
 				BB2000000523F00001AA01 /* AutoSwitchMemory.swift in Sources */,
 				BB200000012F00000100AA01 /* LayoutDictionary.swift in Sources */,
 				BB200000022F00000100AA01 /* AutoSwitchEngine.swift in Sources */,
+				BB200000063F00000100AA01 /* NGramModel.swift in Sources */,
 				7A765D5F25D916460076B974 /* Key.swift in Sources */,
 				286A658A2F94003B00D25CBC /* MenuView.swift in Sources */,
 				286A658B2F94003B00D25CBC /* BabblerApp.swift in Sources */,

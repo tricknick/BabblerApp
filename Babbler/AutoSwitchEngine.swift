@@ -36,38 +36,60 @@ enum AutoSwitchEngine {
   /// "it" followed by a full stop.
   private static let ambiguousTrailingCharacters = CharacterSet(charactersIn: ",.;'")
 
+  /// Which rule decided to switch, strongest evidence first.
+  enum Tier: Equatable {
+    /// The conversion is a word in the other layout's dictionary.
+    case exact
+    /// The conversion is a word with one keystroke missing.
+    case typo
+    /// Neither form is a word anywhere, but the conversion reads like the other
+    /// language and the typed form does not read like this one.
+    case languageModel
+  }
+
   static func evaluate(
     word rawWord: String,
     currentLayout: Layout,
     dictionary: LayoutDictionary = .shared
   ) -> Decision {
-    guard dictionary.isReady else { return .keep }
+    matchTier(word: rawWord, currentLayout: currentLayout, dictionary: dictionary) == nil
+      ? .keep
+      : .switchLayout
+  }
+
+  /// The tier that would switch `rawWord`, or nil if it is left alone.
+  static func matchTier(
+    word rawWord: String,
+    currentLayout: Layout,
+    dictionary: LayoutDictionary = .shared
+  ) -> Tier? {
+    guard dictionary.isReady else { return nil }
 
     let trimmed = rawWord.trimmingCharacters(in: trimmableCharacters)
-    guard isEligible(trimmed), !looksLikeCodeOrAddress(trimmed) else { return .keep }
+    guard isEligible(trimmed), !looksLikeCodeOrAddress(trimmed) else { return nil }
 
     let word = trimmed.lowercased()
 
     // Already a real word where it stands — leave it alone.
-    if dictionary.contains(word, in: currentLayout) { return .keep }
+    if dictionary.contains(word, in: currentLayout) { return nil }
 
     // "it." is a real word plus a full stop; "ndj." is the Russian "твою". Tell
     // them apart by asking whether dropping the trailing punctuation leaves a
     // word in the layout the user is already using.
     if hasAmbiguousTrailing(word), dictionary.contains(stem(of: word), in: currentLayout) {
-      return .keep
+      return nil
     }
 
     let converted = convert(word, to: currentLayout.other)
-    guard converted != word else { return .keep }
+    guard converted != word else { return nil }
 
     // The candidate must be a plain run of letters in the target layout.
     // Anything else means these keys do not spell a word over there.
     guard converted.rangeOfCharacter(from: CharacterSet.letters.inverted) == nil else {
-      return .keep
+      return nil
     }
 
-    if dictionary.contains(converted, in: currentLayout.other) { return .switchLayout }
+    if dictionary.contains(converted, in: currentLayout.other) { return .exact }
 
     // Last resort: the user typed a real word in the other layout but missed a
     // keystroke, so "ghdtn" is "првет" — obviously Russian, but not a word.
@@ -79,10 +101,90 @@ enum AutoSwitchEngine {
     // much riskier thing to do. It also means an ambiguous match costs nothing,
     // because we never have to choose between candidates.
     if dictionary.hasWordOneInsertionAway(converted, in: currentLayout.other) {
-      return .switchLayout
+      return .typo
     }
 
-    return .keep
+    // Colloquial, derived and invented words are in no list. Fall back to asking
+    // which language the letters look like.
+    if let score = languageModelScore(
+      typed: word, converted: converted, currentLayout: currentLayout, dictionary: dictionary
+    ), score.passes {
+      return .languageModel
+    }
+
+    return nil
+  }
+
+  /// The language-model evidence for switching a token.
+  struct LanguageModelScore {
+    /// Per-character log-likelihood of the conversion in the other language
+    /// minus that of the typed text in the current one.
+    let margin: Double
+    /// Per-character log-likelihood of the conversion alone.
+    let plausibility: Double
+    let length: Int
+    /// The language the conversion would be in.
+    let target: Layout
+
+    var passes: Bool {
+      margin >= AutoSwitchEngine.languageModelMargin(forLength: length)
+        && plausibility >= AutoSwitchEngine.languageModelFloor(for: target)
+    }
+  }
+
+  /// Letters needed before the language model is consulted. Four-letter strings
+  /// are accepted only with a large margin: see docs/DICTIONARY.md.
+  static let languageModelMinimumLength = 4
+
+  /// Margin (nats per character) a conversion must beat the typed text by. Short
+  /// strings carry little evidence, so they need far more of it: measured on
+  /// held-out words, a margin of 1.0 mislabels 1.8% of four-letter Russian words
+  /// but 0.01% of six-letter ones.
+  static func languageModelMargin(forLength length: Int) -> Double {
+    switch length {
+    case ..<5: return 2.5
+    case 5: return 2.0
+    case 6, 7: return 1.5
+    default: return 1.25
+    }
+  }
+
+  /// Lowest per-character log-likelihood the conversion itself may have. It
+  /// keeps out strings the typed side merely scores worse on: keyboard mashing,
+  /// stray consonant runs. English is held to a stricter floor because Russian
+  /// names and transliterations are the likeliest accidental fits.
+  static func languageModelFloor(for target: Layout) -> Double {
+    target == .english ? -3.5 : -4.5
+  }
+
+  static func languageModelScore(
+    typed: String,
+    converted: String,
+    currentLayout: Layout,
+    dictionary: LayoutDictionary = .shared
+  ) -> LanguageModelScore? {
+    let length = converted.count
+    guard length >= languageModelMinimumLength,
+          let target = dictionary.nGramModel(for: currentLayout.other),
+          let source = dictionary.nGramModel(for: currentLayout) else { return nil }
+
+    // A trailing , . ; ' may be a full stop or the letters б ю ж э. Do not hold
+    // it against the typed text; the model that reads it as punctuation would
+    // otherwise be handed free evidence.
+    var typedScalars = Array(typed.unicodeScalars)
+    while let last = typedScalars.last, ambiguousTrailingCharacters.contains(last) {
+      typedScalars.removeLast()
+    }
+    let stem = String(String.UnicodeScalarView(typedScalars))
+      .replacingOccurrences(of: "ё", with: "е")
+    let readTarget = converted.replacingOccurrences(of: "ё", with: "е")
+
+    let normaliser = Double(length + 1)
+    let plausibility = target.logProbability(of: readTarget) / normaliser
+    let margin = plausibility - source.logProbability(of: stem) / normaliser
+    return LanguageModelScore(
+      margin: margin, plausibility: plausibility, length: length, target: currentLayout.other
+    )
   }
 
   /// Whether the decision for this word was an exact dictionary hit rather than

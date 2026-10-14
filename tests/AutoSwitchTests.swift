@@ -42,6 +42,13 @@ let russianTypoSet = russianListOverride != nil
   : HashedWordSet(contentsOf: URL(fileURLWithPath: "\(resources)/ru-typo.bin"))!
 LayoutDictionary.shared.setForTests(Set(englishWords), russianSet, typo: russianTypoSet)
 
+// Time the model load separately: it must stay well under the 100 ms budget.
+let modelLoadStart = DispatchTime.now()
+let shippedEnglishModel = NGramModel(contentsOf: URL(fileURLWithPath: "\(resources)/ngram-en.bin"))
+let shippedRussianModel = NGramModel(contentsOf: URL(fileURLWithPath: "\(resources)/ngram-ru.bin"))
+let modelLoadMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - modelLoadStart.uptimeNanoseconds) / 1e6
+LayoutDictionary.shared.setNGramModels(english: shippedEnglishModel, russian: shippedRussianModel)
+
 var failures = 0
 func check(_ passed: Bool, _ message: String) {
   if !passed {
@@ -385,18 +392,25 @@ if let raw = try? String(contentsOfFile: rawEnglishPath, encoding: .utf8) {
   let known = Set(englishWords)
   var total = 0
   var misfires: [String] = []
+  var modelMisfires: [String] = []
   raw.enumerateLines { line, _ in
     let word = line.trimmingCharacters(in: .whitespaces).lowercased()
     guard word.count >= 3, !known.contains(word) else { return }
     total += 1
-    if AutoSwitchEngine.evaluate(word: word, currentLayout: .english) == .switchLayout {
-      misfires.append(word)
+    switch AutoSwitchEngine.matchTier(word: word, currentLayout: .english) {
+    case .exact, .typo: misfires.append(word)
+    case .languageModel: modelMisfires.append(word)
+    case nil: break
     }
   }
   let rate = total == 0 ? 0 : Double(misfires.count) * 100 / Double(total)
-  print(String(format: "  %d/%d = %.4f%%  e.g. %@", misfires.count, total, rate,
+  print(String(format: "  dictionary tiers: %d/%d = %.4f%%  e.g. %@", misfires.count, total, rate,
                misfires.prefix(8).joined(separator: " ")))
   check(rate < 0.1, "out-of-vocabulary English misfire rate \(rate)% exceeds budget")
+  let modelRate = total == 0 ? 0 : Double(modelMisfires.count) * 100 / Double(total)
+  print(String(format: "  language-model tier: %d/%d = %.4f%%  e.g. %@", modelMisfires.count, total, modelRate,
+               modelMisfires.prefix(8).joined(separator: " ")))
+  check(modelRate <= 0.05, "language-model misfire rate \(modelRate)% on out-of-vocabulary English exceeds budget")
 } else {
   print("  WARNING: \(rawEnglishPath) is missing; skipped. Run scripts/build_dictionaries.sh.")
 }
@@ -585,6 +599,259 @@ do {
         "the most recent word must survive eviction")
   check(store.rejections["word0"] == nil,
         "the oldest word must be evicted first")
+}
+
+// MARK: - Language-model tier
+
+// The last tier handles words that are in no dictionary: colloquial, derived
+// and invented ones ("жопецкий", "бизнесяка"). It must switch those without ever
+// touching correctly typed text, so the checks below measure both sides.
+
+let testDataDirectory = ProcessInfo.processInfo.environment["BABBLER_TEST_DATA"]
+  ?? FileManager.default.currentDirectoryPath + "/tests/data"
+
+func readList(_ path: String) -> [String] {
+  guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return [] }
+  return text.split(whereSeparator: \.isNewline)
+    .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+    .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+}
+
+func percent(_ part: Int, _ whole: Int) -> Double {
+  whole == 0 ? 0 : Double(part) * 100 / Double(whole)
+}
+
+func residentBytes() -> Int {
+  var info = mach_task_basic_info()
+  var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+  let status = withUnsafeMutablePointer(to: &info) { pointer in
+    pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+      task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+    }
+  }
+  return status == KERN_SUCCESS ? Int(info.resident_size) : 0
+}
+
+/// How far a token clears the language-model bar, in nats per character: the
+/// margin above the length's threshold, or nil if it fails the plausibility
+/// floor or is not eligible. Switches at the shipped setting when >= 0.
+func languageModelSlack(_ typed: String, in layout: Layout) -> Double? {
+  let converted = AutoSwitchEngine.convert(typed, to: layout.other)
+  guard converted != typed, converted.rangeOfCharacter(from: CharacterSet.letters.inverted) == nil,
+        let score = AutoSwitchEngine.languageModelScore(
+          typed: typed, converted: converted, currentLayout: layout),
+        score.plausibility >= AutoSwitchEngine.languageModelFloor(for: score.target) else { return nil }
+  return score.margin - AutoSwitchEngine.languageModelMargin(forLength: score.length)
+}
+
+let colloquialWords = readList("\(testDataDirectory)/colloquial-ru.txt")
+let brandWords = readList("\(testDataDirectory)/brands-en.txt")
+let shippedDictionary = LayoutDictionary.shared
+
+print("=== language model: the test words really are in no dictionary")
+let colloquialInDictionary = colloquialWords.filter { shippedDictionary.contains($0, in: .russian) }
+check(!colloquialWords.isEmpty, "colloquial list is missing from \(testDataDirectory)")
+check(colloquialInDictionary.isEmpty, "colloquial words found in the dictionary: \(colloquialInDictionary)")
+let brandsOutsideDictionary = brandWords.filter { !shippedDictionary.contains($0, in: .english) }
+print("  \(colloquialWords.count) colloquial Russian words; \(brandWords.count) brand/tech names, \(brandsOutsideDictionary.count) of them outside the dictionary")
+
+print("=== language model: the motivating examples")
+for (word, meaning) in [("жопецкий", "derived from жопа"), ("бизнесяка", "colloquial бизнес"),
+                        ("кринжовый", "slang adjective")] {
+  let typed = AutoSwitchEngine.convert(word, to: .english)
+  check(AutoSwitchEngine.matchTier(word: typed, currentLayout: .english) == .languageModel,
+        "\(typed) (\(word), \(meaning)) must switch through the language model")
+}
+
+print("=== language model: colloquial Russian typed on the English layout")
+var colloquialMissed: [String] = []
+var colloquialByModel = 0
+for word in colloquialWords {
+  let typed = AutoSwitchEngine.convert(word, to: .english)
+  switch AutoSwitchEngine.matchTier(word: typed, currentLayout: .english) {
+  case .languageModel: colloquialByModel += 1
+  case .exact, .typo: break
+  case nil: colloquialMissed.append(word)
+  }
+}
+let colloquialRecall = percent(colloquialWords.count - colloquialMissed.count, colloquialWords.count)
+print(String(format: "  recall %d/%d = %.1f%% (%d through the model); missed: %@",
+             colloquialWords.count - colloquialMissed.count, colloquialWords.count, colloquialRecall,
+             colloquialByModel, colloquialMissed.joined(separator: " ")))
+check(colloquialRecall >= 85, "colloquial recall \(colloquialRecall)% is below 85%")
+
+print("=== language model: colloquial Russian typed correctly stays put")
+let colloquialCorrupted = colloquialWords.filter {
+  AutoSwitchEngine.evaluate(word: $0, currentLayout: .russian) == .switchLayout
+}
+print("  switched: \(colloquialCorrupted.count)/\(colloquialWords.count)")
+check(colloquialCorrupted.isEmpty, "correctly typed colloquial words switched: \(colloquialCorrupted)")
+
+print("=== language model: brand and tech names typed correctly stay put")
+let brandsCorrupted = brandWords.filter {
+  AutoSwitchEngine.evaluate(word: $0, currentLayout: .english) == .switchLayout
+}
+print("  switched: \(brandsCorrupted.count)/\(brandWords.count) \(brandsCorrupted)")
+check(brandsCorrupted.isEmpty, "brand names switched: \(brandsCorrupted)")
+
+print("=== language model: English typed on the Russian layout")
+let brandsOnRussian = brandsOutsideDictionary.map { (word: $0, typed: AutoSwitchEngine.convert($0, to: .russian)) }
+let brandsMissed = brandsOnRussian.filter {
+  AutoSwitchEngine.evaluate(word: $0.typed, currentLayout: .russian) == .keep
+}.map(\.word)
+let brandRecall = percent(brandsOnRussian.count - brandsMissed.count, brandsOnRussian.count)
+print(String(format: "  recall %d/%d = %.1f%%; missed: %@", brandsOnRussian.count - brandsMissed.count,
+             brandsOnRussian.count, brandRecall, brandsMissed.joined(separator: " ")))
+check(brandRecall >= 70, "English-on-Russian recall \(brandRecall)% is below 70%")
+check(AutoSwitchEngine.evaluate(word: "кгиуктуеуы", currentLayout: .russian) == .switchLayout,
+      "кгиуктуеуы (kubernetes) must switch")
+
+print("=== language model: keyboard mashing and code-like tokens are left alone")
+for typed in ["asdfgh", "qwertyuiop", "йцукенгш", "фывапролдж", "аааааа", "wwwwww"] {
+  let layout: Layout = typed.unicodeScalars.contains { $0.value > 0x7f } ? .russian : .english
+  check(AutoSwitchEngine.evaluate(word: typed, currentLayout: layout) == .keep, "\(typed) must be kept")
+}
+for typed in [";jgtwrbq_v2", "grafana2", "Ghbdtn", ";jgtwrbq@mail", "/,bpytc", ",bpytc.exe/"] {
+  check(AutoSwitchEngine.evaluate(word: typed, currentLayout: .english) == .keep,
+        "\(typed) must be kept")
+}
+
+print("=== language model: never anchors a phrase sweep, and learned rejections apply")
+for word in colloquialWords {
+  let typed = AutoSwitchEngine.convert(word, to: .english)
+  if AutoSwitchEngine.matchTier(word: typed, currentLayout: .english) == .languageModel {
+    check(!AutoSwitchEngine.isExactMatch(word: typed, currentLayout: .english),
+          "\(typed) must not count as an exact match")
+  }
+}
+do {
+  let typed = AutoSwitchEngine.convert("жопецкий", to: .english)
+  let store = FakeMemoryStore()
+  let memory = AutoSwitchMemory(store: store)
+  let normalized = AutoSwitchEngine.normalize(typed)
+  check(!memory.shouldSkip(word: normalized, now: at(500)) &&
+        AutoSwitchEngine.evaluate(word: typed, currentLayout: .english) == .switchLayout,
+        "a language-model correction is made before any rejection")
+  for round in 0..<3 { reject(memory, normalized, from: Double(round) * 100, using: undoGesture) }
+  check(memory.shouldSkip(word: normalized, now: at(500)),
+        "three rejections must stop the language-model correction, as for any tier")
+}
+
+print("=== language model: speed and memory")
+do {
+  let sample = Array(colloquialWords.map { AutoSwitchEngine.convert($0, to: .english) }
+    + brandWords.map { AutoSwitchEngine.convert($0, to: .russian) })
+  var evaluations = 0
+  let start = DispatchTime.now()
+  for _ in 0..<2000 {
+    for typed in sample {
+      let layout: Layout = typed.unicodeScalars.contains { $0.value > 0x7f } ? .russian : .english
+      let converted = AutoSwitchEngine.convert(typed, to: layout.other)
+      _ = AutoSwitchEngine.languageModelScore(typed: typed, converted: converted, currentLayout: layout)
+      evaluations += 1
+    }
+  }
+  let microseconds = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1e3 / Double(evaluations)
+  let before = residentBytes()
+  let reloadedEnglish = NGramModel(contentsOf: URL(fileURLWithPath: "\(resources)/ngram-en.bin"))
+  let reloadedRussian = NGramModel(contentsOf: URL(fileURLWithPath: "\(resources)/ngram-ru.bin"))
+  let added = Double(residentBytes() - before) / 1_048_576
+  print(String(format: "  scoring %.1f µs/word (convert + both models), load %.1f ms, resident +%.1f MB",
+               microseconds, modelLoadMilliseconds, added))
+  check(microseconds < 100, "scoring takes \(microseconds) µs/word, budget 100")
+  check(modelLoadMilliseconds < 100, "model load takes \(modelLoadMilliseconds) ms, budget 100")
+  check(added < 15, "models add \(added) MB, budget 15")
+  check(reloadedEnglish != nil && reloadedRussian != nil, "models reload")
+}
+
+// MARK: - Language model: sweeps and the threshold trade-off
+
+print("=== language model: out-of-vocabulary words typed correctly, shipped models")
+/// Words from the frequency lists that no dictionary has, the realistic "unknown
+/// word" population: names, transliterations, interjections, subtitle noise.
+func frequencyUnknowns(_ name: String, layout: Layout) -> [String] {
+  guard let text = try? String(contentsOfFile: cacheDirectory + "/" + name, encoding: .utf8) else { return [] }
+  var words: [String] = []
+  for line in text.split(whereSeparator: \.isNewline) {
+    let parts = line.split(separator: " ")
+    guard parts.count == 2, let count = Int(parts[1]), count >= 20, parts[0].count >= 4 else { continue }
+    let word = String(parts[0])
+    guard !shippedDictionary.contains(word, in: layout) else { continue }
+    words.append(word)
+  }
+  return words
+}
+let rawEnglishWords: [String] = {
+  guard let text = try? String(contentsOfFile: cacheDirectory + "/en_words.txt", encoding: .utf8) else { return [] }
+  let known = Set(englishWords)
+  return text.split(whereSeparator: \.isNewline)
+    .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+    .filter { $0.count >= 4 && !known.contains($0) }
+}()
+let russianUnknowns = frequencyUnknowns("ru_freq.txt", layout: .russian).filter { $0.allSatisfy { ("а"..."я").contains($0) } }
+let englishUnknowns = frequencyUnknowns("en_freq.txt", layout: .english).filter { $0.allSatisfy { ("a"..."z").contains($0) } }
+
+func slackSummary(_ title: String, _ words: [String], typedOn layout: Layout) -> [Double?] {
+  let slacks = words.map { languageModelSlack($0, in: layout) }
+  let switched = slacks.filter { ($0 ?? -1) >= 0 }.count
+  print(String(format: "  %@: %d/%d = %.4f%%", title, switched, words.count, percent(switched, words.count)))
+  return slacks
+}
+if !rawEnglishWords.isEmpty {
+  let slacks = slackSummary("false positives, words_alpha outside the shipped English list", rawEnglishWords, typedOn: .english)
+  let rate = percent(slacks.filter { ($0 ?? -1) >= 0 }.count, rawEnglishWords.count)
+  check(rate <= 0.05, "English language-model false-positive rate \(rate)% exceeds 0.05%")
+} else {
+  print("  WARNING: no English word list in \(cacheDirectory); skipped. Run scripts/build_dictionaries.sh.")
+}
+if !russianUnknowns.isEmpty {
+  _ = slackSummary("false positives, frequent Russian words outside the dictionary", russianUnknowns, typedOn: .russian)
+  _ = slackSummary("false positives, frequent English words outside the dictionary", englishUnknowns, typedOn: .english)
+}
+
+// Honest evaluation: models trained without 10% of Russian lemmas and 10% of
+// English words, scored on exactly those words. The shipped models have seen
+// every dictionary word, so only this measures generalisation.
+let holdoutDirectory = ProcessInfo.processInfo.environment["BABBLER_NGRAM_HOLDOUT"]
+  ?? cacheDirectory + "/ngram-holdout"
+let holdoutRussian = readList("\(holdoutDirectory)/holdout-ru.txt").filter { $0.count >= 4 }
+let holdoutEnglish = readList("\(holdoutDirectory)/holdout-en.txt").filter { $0.count >= 4 }
+if let heldRussianModel = NGramModel(contentsOf: URL(fileURLWithPath: "\(holdoutDirectory)/ngram-ru.bin")),
+   let heldEnglishModel = NGramModel(contentsOf: URL(fileURLWithPath: "\(holdoutDirectory)/ngram-en.bin")),
+   !holdoutRussian.isEmpty, !holdoutEnglish.isEmpty {
+  print("=== language model: held-out words (models never saw them), \(holdoutRussian.count) Russian forms, \(holdoutEnglish.count) English words")
+  LayoutDictionary.shared.setNGramModels(english: heldEnglishModel, russian: heldRussianModel)
+  defer { LayoutDictionary.shared.setNGramModels(english: shippedEnglishModel, russian: shippedRussianModel) }
+
+  let russianOnEnglish = slackSummary("recall, Russian typed on the English layout", holdoutRussian.map { AutoSwitchEngine.convert($0, to: .english) }, typedOn: .english)
+  let russianCorrect = slackSummary("false positives, Russian typed correctly", holdoutRussian, typedOn: .russian)
+  let englishOnRussian = slackSummary("recall, English typed on the Russian layout", holdoutEnglish.map { AutoSwitchEngine.convert($0, to: .russian) }, typedOn: .russian)
+  let englishCorrect = slackSummary("false positives, English typed correctly", holdoutEnglish, typedOn: .english)
+  check(percent(russianCorrect.filter { ($0 ?? -1) >= 0 }.count, holdoutRussian.count) <= 0.05, "held-out Russian false positives exceed 0.05%")
+  check(percent(englishCorrect.filter { ($0 ?? -1) >= 0 }.count, holdoutEnglish.count) <= 0.05, "held-out English false positives exceed 0.05%")
+
+  // The same words through the held-out models, for the trade-off table. The
+  // curated Russian words were never in the training data, so they are honest too.
+  let colloquialSlacks = colloquialWords.map { languageModelSlack(AutoSwitchEngine.convert($0, to: .english), in: .english) }
+  let brandSlacks = brandsOutsideDictionary.map { languageModelSlack(AutoSwitchEngine.convert($0, to: .russian), in: .russian) }
+  let russianUnknownCorrect = russianUnknowns.map { languageModelSlack($0, in: .russian) }
+  let englishUnknownCorrect = englishUnknowns.map { languageModelSlack($0, in: .english) }
+  print("  threshold shift -> recall (colloquial RU / held-out RU / held-out EN / brands on RU) | false positives (held-out RU / held-out EN / unknown RU / unknown EN)")
+  for shift in [-1.0, -0.5, 0.0, 0.5, 1.0, 1.5] {
+    func count(_ slacks: [Double?]) -> Int { slacks.filter { ($0 ?? -.infinity) >= shift }.count }
+    print(String(format: "  %+.1f -> %5.1f%% %5.1f%% %5.1f%% %5.1f%% | %.4f%% %.4f%% %.3f%% %.3f%%",
+                 shift,
+                 percent(count(colloquialSlacks), colloquialSlacks.count),
+                 percent(count(russianOnEnglish), russianOnEnglish.count),
+                 percent(count(englishOnRussian), englishOnRussian.count),
+                 percent(count(brandSlacks), brandSlacks.count),
+                 percent(count(russianCorrect), russianCorrect.count),
+                 percent(count(englishCorrect), englishCorrect.count),
+                 percent(count(russianUnknownCorrect), russianUnknownCorrect.count),
+                 percent(count(englishUnknownCorrect), englishUnknownCorrect.count)))
+  }
+} else {
+  print("  held-out models not found in \(holdoutDirectory); honest evaluation skipped. Run scripts/build_dictionaries.sh.")
 }
 
 print(failures == 0 ? "\nALL CHECKS PASS" : "\n\(failures) FAILURES")

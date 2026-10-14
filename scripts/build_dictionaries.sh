@@ -1,7 +1,7 @@
 #!/bin/zsh
 #
-# Rebuilds Babbler/Resources/{en.txt.gz,ru-forms.bin,ru-typo.bin} from public
-# word lists.
+# Rebuilds Babbler/Resources/{en.txt.gz,ru-forms.bin,ru-typo.bin,ngram-ru.bin,ngram-en.bin}
+# from public word lists.
 #
 # English is the intersection of a spellcheck word list with an OpenSubtitles
 # frequency list, cut to a size that keeps the app's memory footprint
@@ -167,8 +167,8 @@ VENV="$CACHE_DIR/venv"
 if [[ ! -x "$VENV/bin/python" ]]; then
   python3 -m venv "$VENV"
 fi
-if ! "$VENV/bin/python" -c "import pymorphy3" 2>/dev/null; then
-  "$VENV/bin/pip" install --quiet "${PYMORPHY_PACKAGES[@]}"
+if ! "$VENV/bin/python" -c "import pymorphy3, numpy" 2>/dev/null; then
+  "$VENV/bin/pip" install --quiet "${PYMORPHY_PACKAGES[@]}" numpy
 fi
 
 "$VENV/bin/python" "$ROOT_DIR/scripts/build_ru_forms.py" \
@@ -180,6 +180,13 @@ fi
   --keys "$ROOT_DIR/Babbler/KeyDictionary.swift" \
   --out-dir "$OUT_DIR" \
   --cache "$CACHE_DIR"
+
+# The character n-gram models trained on every word, which ship; and a second
+# pair trained without 10% of the words, which tests/run.sh scores honestly.
+echo "==> Training the character n-gram models..."
+"$VENV/bin/python" "$ROOT_DIR/scripts/build_ngram_models.py" --cache "$CACHE_DIR" --output "$OUT_DIR"
+"$VENV/bin/python" "$ROOT_DIR/scripts/build_ngram_models.py" --cache "$CACHE_DIR" \
+  --holdout 0.1 --output "$CACHE_DIR/ngram-holdout"
 
 rm -f "$OUT_DIR/ru.txt.gz"
 echo "==> Done. Rebuild the app to pick them up: ./scripts/install.sh"

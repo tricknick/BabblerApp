@@ -35,6 +35,8 @@ final class LayoutDictionary {
   /// Subset of `russian` the typo probe may match: see `hasWordOneInsertionAway`.
   private var russianTypo = HashedWordSet()
   private var russianCustom: Set<String> = []
+  private var englishModel: NGramModel?
+  private var russianModel: NGramModel?
   private let lock = NSLock()
   private var didStartLoading = false
   private var isLoaded = false
@@ -67,8 +69,14 @@ final class LayoutDictionary {
       let ruTypo = Bundle.main.url(forResource: "ru-typo", withExtension: "bin")
         .flatMap { HashedWordSet(contentsOf: $0) } ?? HashedWordSet()
       let ruCustom = Self.loadCustomWords(named: "custom-ru")
+      let enModel = Bundle.main.url(forResource: "ngram-en", withExtension: "bin")
+        .flatMap { NGramModel(contentsOf: $0) }
+      let ruModel = Bundle.main.url(forResource: "ngram-ru", withExtension: "bin")
+        .flatMap { NGramModel(contentsOf: $0) }
 
       self.lock.lock()
+      self.englishModel = enModel
+      self.russianModel = ruModel
       self.english = en
       self.russian = ru
       self.russianTypo = ruTypo
@@ -76,6 +84,22 @@ final class LayoutDictionary {
       self.isLoaded = !en.isEmpty && !ru.isEmpty
       self.lock.unlock()
     }
+  }
+
+  /// The character n-gram model for a layout's language, for the engine's last
+  /// tier. Nil if the resource is missing, which simply turns that tier off.
+  func nGramModel(for layout: Layout) -> NGramModel? {
+    lock.lock()
+    defer { lock.unlock() }
+    guard isLoaded else { return nil }
+    return layout == .english ? englishModel : russianModel
+  }
+
+  func setNGramModels(english: NGramModel?, russian: NGramModel?) {
+    lock.lock()
+    englishModel = english
+    russianModel = russian
+    lock.unlock()
   }
 
   /// Directory holding the user's own additions, alongside the crash logs.

@@ -296,8 +296,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // their own because one and two letter words are ambiguous, but this
         // correction is the context that resolves them.
         //
-        // Only an exact dictionary hit may anchor a sweep. A typo match is a
-        // weaker signal, and letting it drag neighbouring words in would
+        // Only an exact dictionary hit may anchor a sweep. A typo or language-model
+        // match is a weaker signal, and letting it drag neighbouring words in would
         // multiply the error rather than contain it.
         let anchorIsExact = AutoSwitchEngine.isExactMatch(word: word, currentLayout: layout)
         let full = (anchorIsExact ? phrasePrefix(for: layout) : []) + record

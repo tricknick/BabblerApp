@@ -469,18 +469,79 @@ raises the out-of-vocabulary misfire rate; re-run `./tests/run.sh`.
 - **Regional lists** if UK/US divergence ever matters more than it does today —
   currently both are fully covered, so this is not worth doing.
 
-## Beyond dictionaries
+## Character n-gram language model (last tier)
 
-The lookup approach has a hard ceiling: it can never judge a word it has not
-seen. The standard next step, and what Punto Switcher actually does, is
-**character n-gram scoring**: score a word's letter trigrams against per-language
-statistics and pick the more likely language.
+A lookup can never judge a word it has not seen: derived, colloquial and nonce
+words (`жопецкий`, `бизнесяка`, `кринжовый`) and brand names (`kubernetes`) are
+in no list. So the engine's last tier is a character n-gram model per language,
+used only when the exact and typo tiers both found nothing.
 
-That handles names, slang, neologisms and typos with no word list at all, in
-about 200 KB of tables instead of 1 MB. The natural design is a hybrid — the
-dictionary decides when it knows the word, and n-grams break the tie when it
-does not — which would mostly close the remaining out-of-vocabulary gap and
-could safely lower the three-character floor to two.
+**Design.**
+
+- Order 4 over letters plus a word-boundary symbol; interpolated Kneser-Ney with
+  one Ney-Essen discount per order. RU alphabet is `а`-`я` (`ё` folded to `е`),
+  EN is `a`-`z`.
+- Training data: RU = every OpenCorpora form (3,015,710 words incl.
+  `supplement-ru`), EN = `words_alpha` + `en.txt.gz` + `supplement-en` (369,728).
+- Format (`BNGM`): header + raw-deflate dense table of `V^4` bytes, each
+  `round(-ln p * 16)` clamped to 255. Sizes: `ngram-ru.bin` 952,727 B,
+  `ngram-en.bin` 323,681 B (1.25 MB total). Load 8-33 ms, +0.1 MB resident,
+  scoring about 3.6 µs per word.
+- Decision for a token typed in layout A whose conversion is in layout B, after
+  the usual eligibility checks and `looksLikeCodeOrAddress`:
+  `plausibility = logP_B(converted)/(len+1)`,
+  `margin = plausibility - logP_A(typed)/(len+1)`.
+  Switch iff the converted word has at least 4 letters, `margin >= threshold(len)`
+  and `plausibility >= floor(B)`.
+  - thresholds by length: 4 → 2.5, 5 → 2.0, 6-7 → 1.5, 8+ → 1.25
+  - floors: -4.5 when B is Russian, -3.5 when B is English
+  - the A model scores the typed string as is; punctuation keys inside or at
+    the start of an English-typed token are out-of-alphabet (12 nat penalty),
+    trailing `, . ; '` is stripped first.
+- A language-model match never counts as an exact match, so it cannot anchor
+  the short-word phrase sweep, and learned rejections (`AutoSwitchMemory`)
+  apply as for every other tier.
+
+**Results** (`./tests/run.sh`):
+
+| Check | Result |
+| --- | --- |
+| Colloquial RU typed on EN (115 words, none in dictionary) | 104/115 = 90.4% (honest, held-out models) |
+| Same words typed correctly | 0/115 switched |
+| Held-out RU forms (296,176, never trained on): recall / FP | 98.97% / 0 |
+| Held-out EN words (36,315): recall / FP | 98.46% / 0 |
+| English words outside the shipped list typed correctly (231,286) | 0 FP |
+| 233 brand/tech names typed correctly | 0 FP |
+| Brands outside the dictionary typed on RU layout (141) | 78.0% |
+| Frequent RU / EN unknowns typed correctly | 0.074% / 0.009% FP |
+
+Threshold shift trade-off (added to every threshold; 0 is shipped):
+
+| Shift | Colloq. recall | Held-out RU | Held-out EN | Brands | FP held-out RU / EN | FP unknown RU / EN |
+| --- | --- | --- | --- | --- | --- | --- |
+| -1.0 | 93.9% | 99.7% | 99.0% | 76.6% | 0.0030% / 0.0055% | 0.167% / 0.044% |
+| -0.5 | 93.0% | 99.5% | 98.8% | 76.6% | 0.0007% / 0 | 0.093% / 0.023% |
+| 0 | 89.6% | 99.0% | 98.5% | 75.2% | 0 / 0 | 0.060% / 0.009% |
+| +0.5 | 83.5% | 97.9% | 97.7% | 73.8% | 0 / 0 | 0.046% / 0.003% |
+| +1.0 | 76.5% | 95.2% | 95.9% | 71.6% | 0 / 0 | 0.014% / 0.002% |
+| +1.5 | 59.1% | 89.4% | 92.2% | 60.3% | 0 / 0 | 0 / 0 |
+
+(Table figures use the held-out models; shipped models score slightly higher
+on words they trained on.) Most frequent-unknown "false positives" are OCR-like
+junk in the frequency list (`куинн`, `лнфер`).
+
+**Retraining.** `./scripts/build_dictionaries.sh` trains both pairs (needs
+`numpy`, installed in `build/dict-cache/venv`). By hand:
+
+```
+build/dict-cache/venv/bin/python scripts/build_ngram_models.py            # shipped, to Babbler/Resources
+build/dict-cache/venv/bin/python scripts/build_ngram_models.py --holdout 0.1 \
+  --output build/dict-cache/ngram-holdout                                  # honest-evaluation models
+```
+
+The holdout leaves out 10% of RU lemmas and 10% of EN words (by hash); the
+test run scores them with models that never saw them. Colloquial and brand test
+lists live in `tests/data/`.
 
 ## Memory and load time
 
