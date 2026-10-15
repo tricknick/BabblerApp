@@ -172,6 +172,7 @@ if ! "$VENV/bin/python" -c "import pymorphy3, numpy" 2>/dev/null; then
 fi
 
 "$VENV/bin/python" "$ROOT_DIR/scripts/build_ru_forms.py" \
+  --en-freq "$CACHE_DIR/en_freq.txt" \
   --core "$CACHE_DIR/ru-core.txt" \
   --supplement "$SUPP_DIR/supplement-ru.txt" \
   --short "$SUPP_DIR/short-ru.txt" \

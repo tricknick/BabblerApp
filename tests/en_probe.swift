@@ -117,7 +117,10 @@ for (i, word) in enFreq.enumerated() {
   switch fullEN[i] {
   case .correct: enCorrect += 1
   case .wrong: enWrong += 1
-  case .kept: enCauses.add(enCause(word, typed: enTyped[i], coreSet: ruCore), word)
+  case .kept:
+    let c = enCause(word, typed: enTyped[i], coreSet: ruCore)
+    enCauses.add(c, word)
+    if c == "collision-morph" { print("MORPH \(word) \(enTyped[i])") }
   }
   if case .correct = coreEN[i], case .correct = fullEN[i] {} else if case .correct = coreEN[i] { lost += 1 }
   if case .correct = fullEN[i], case .correct = coreEN[i] {} else if case .correct = fullEN[i] { gained += 1 }

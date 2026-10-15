@@ -1,0 +1,21 @@
+# EN top-20k frequent words lost to RU morphology collisions (STEP 6).
+# Each word is in en.txt.gz and its RU-layout conversion is a non-core form in ru-forms.bin (not in ru-typo.bin).
+# Expected: typed on RU layout, these switch back to EN.
+# Excluded: rene, neha (not in en.txt.gz; names from the frequency list).
+were
+next
+able
+ends
+rent
+heck
+neat
+fart
+fare
+lens
+revs
+dent
+reds
+entity
+feat
+hens
+pelt

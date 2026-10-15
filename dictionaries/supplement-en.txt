@@ -122,3 +122,21 @@ knackered
 gutted
 chuffed
 gobsmacked
+
+# --- chat / IT abbreviations ---
+lgtm
+wfh
+imo
+imho
+tbh
+btw
+afaik
+iirc
+fyi
+idk
+asap
+brb
+omg
+lol
+thx
+pls

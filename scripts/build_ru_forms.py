@@ -27,6 +27,7 @@ FORMAT_VERSION = 1
 MAGIC = b"BBLH"
 
 CYRILLIC = re.compile(r"^[а-яё]+$")
+ENGLISH_WORD = re.compile(r"^[a-z]+$")
 
 # Tags that only add noise: archaic spellings and forms OpenCorpora itself
 # marks as erroneous.
@@ -171,6 +172,26 @@ def english_collisions(forms, protected, to_english, english, english_raw):
             if w not in protected and len(w) >= 3 and to_english(w) in unprotected}
 
 
+def frequent_english(freq_path, limit=20000):
+    """The most frequent all-lowercase Latin words of the frequency list."""
+    words = []
+    for line in freq_path.read_text(encoding="utf-8", errors="replace").split("\n"):
+        first = line.split(" ")[0]
+        if ENGLISH_WORD.match(first):
+            words.append(first)
+            if len(words) == limit:
+                break
+    return set(words)
+
+
+def english_frequent_collisions(forms, protected, to_english, english_common):
+    # Rule: drop non-core forms whose EN-layout keys spell a top-20k English word;
+    # protected (core/short/inflected) forms are never dropped.
+    """Return the non-core forms whose EN-layout keys spell a top English word."""
+    return {w for w in forms
+            if w not in protected and to_english(w) in english_common}
+
+
 def with_yo_variants(words):
     """Add the ё-less spelling: people type "пошел" far more than "пошёл"."""
     extra = {normalize(word) for word in words if "ё" in word}
@@ -191,6 +212,8 @@ def main():
     parser.add_argument("--keys", type=Path, required=True,
                         help="Babbler/KeyDictionary.swift, the layout key map")
     parser.add_argument("--cache", type=Path, required=True)
+    parser.add_argument("--en-freq", type=Path, required=True,
+                        help="English frequency list (word count per line)")
     parser.add_argument("--drop-tags", default=",".join(sorted(DROPPED_TAGS)),
                         help="comma-separated OpenCorpora grammemes to exclude")
     args = parser.parse_args()
@@ -217,15 +240,19 @@ def main():
 
     english = set(gzip.open(args.english, "rt", encoding="utf-8").read().split())
     english_raw = {w.strip().lower() for w in args.english_raw.read_text().splitlines()}
-    dropped = english_collisions(
-        forms, with_yo_variants(core | short | inflected),
-        english_key_forms(args.keys), english, english_raw)
+    protected = with_yo_variants(core | short | inflected)
+    to_english = english_key_forms(args.keys)
+    dropped = english_collisions(forms, protected, to_english, english, english_raw)
+    dropped |= english_frequent_collisions(
+        forms, protected, to_english, frequent_english(args.en_freq))
     forms -= dropped
     print(f"    lexicon {len(lexicon)}, core {len(core)}, supplement "
           f"{len(supplement)} -> {len(inflected)} forms; "
           f"dropped {len(dropped)} colliding with English words; total {len(forms)}")
 
     args.cache.mkdir(parents=True, exist_ok=True)
+    (args.cache / "ru_dropped_forms.txt").write_text(
+        "".join(f"{w}\n" for w in sorted(dropped)), encoding="utf-8")
     listing = args.cache / "ru-forms.txt.gz"
     with gzip.GzipFile(listing, "wb", compresslevel=6, mtime=0) as handle:
         handle.write(("\n".join(sorted(forms)) + "\n").encode("utf-8"))

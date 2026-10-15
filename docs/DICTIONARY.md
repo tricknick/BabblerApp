@@ -49,6 +49,12 @@ distributed under CC BY-SA 3.0; the code remains under the project's licence.
   word typed correctly would then be missing and its keys would look like
   English.
 
+**Top-English collisions.** Non-core forms (not core, short or inflected) whose
+English-layout key sequence spells one of the top 20,000 English words
+(`en_freq.txt`) are dropped from `ru-forms.bin`, so typing that English word on
+the Russian layout is not switched to the Russian form. The dropped forms are
+written sorted to `build/dict-cache/ru_dropped_forms.txt`.
+
 **ё.** The engine does not fold ё and е (they are different keys: `§` and
 `e`), so the list holds both spellings of every form containing ё
 (`пошёл`/`пошел`, `отрефакторённый`/`отрефакторенный`).

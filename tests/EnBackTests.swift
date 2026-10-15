@@ -29,6 +29,20 @@ import Foundation
 //   N2  RU words in tests/data/*.txt ending in ю б ж э х ъ typed on RU layout stay .keep
 //   N3  20k frequent RU words typed on EN layout: correct >= 19404 (probe f floor)
 //   N4  20k frequent EN words typed on RU layout: correct >= 19345 (probe a floor)
+// STEP 5 (EN chat/IT supplement). Contract:
+//   Words lgtm wfh imo imho tbh btw afaik iirc fyi idk asap brb omg lol thx pls, typed
+//   lowercase on RU layout, must switch to EN (evaluate == .switchLayout, convert back == word).
+//   k8s is excluded (digit). Words are added to dictionaries/supplement-en.txt, which
+//   build_dictionaries.sh merges deterministically into en.txt.gz and build_ngram_models.py reads.
+//   Negatives: a word whose RU-layout conversion is itself in ru-forms.bin is listed and
+//   excluded from positives (printed as "step5-coll"); EN-layout typing of each word must be .keep ("step5-neg").
+// STEP 6 (RU morphology collisions). Contract:
+//   tests/data/en-collisions.lst holds the 17 top-20k EN words whose RU-layout conversion is a
+//   non-core form in ru-forms.bin. Typed on RU layout they must switch ("step6").
+//   build_ru_forms.py drops non-core forms whose EN-layout keys equal a word in the top-20k EN
+//   frequency list and writes the dropped forms to <cache>/ru_dropped_forms.txt (one per line).
+//   N3 floor becomes 19404 - dropped ("N3"); dropped forms that are in the top-20k RU frequency list
+//   fail ("step6-common"). A missing dropped file counts as 0 dropped.
 //
 // Env: BABBLER_RESOURCES, BABBLER_DICT_CACHE, BABBLER_TEST_DATA (set by en_back_test.sh).
 
@@ -190,8 +204,12 @@ for word in ruFreq {
   let typed = AutoSwitchEngine.convert(word, to: .english)
   if switchesCorrectly(typed: typed, layout: .english, expected: word) { n3Correct += 1 }
 }
-check("N3", n3Correct >= 19404, "RU-on-EN correct \(n3Correct) < floor 19404")
-print("  N3 RU-on-EN correct: \(n3Correct) / \(ruFreq.count)")
+let droppedForms: [String] = (try? String(contentsOf: URL(fileURLWithPath: "\(cacheDir)/ru_dropped_forms.txt"), encoding: .utf8))?
+  .split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+  .filter { !$0.isEmpty && !$0.hasPrefix("#") } ?? []
+let n3Floor = 19404 - droppedForms.count
+check("N3", n3Correct >= n3Floor, "RU-on-EN correct \(n3Correct) < floor \(n3Floor) (19404 - \(droppedForms.count) dropped)")
+print("  N3 RU-on-EN correct: \(n3Correct) / \(ruFreq.count) floor \(n3Floor)")
 
 var n4Correct = 0
 for word in enFreq {
@@ -331,11 +349,55 @@ for name in properNouns {
 print("  N7 proper-noun false positives: \(n7FP) / \(properNouns.count) examples: \(n7Examples)")
 check("N7", n7FP == 0, "\(n7FP) proper nouns would switch in native layout")
 
+// MARK: - STEP 5: EN chat/IT supplement
+
+let step5Words = ["lgtm", "wfh", "imo", "imho", "tbh", "btw", "afaik", "iirc", "fyi", "idk",
+                  "asap", "brb", "omg", "lol", "thx", "pls"]
+check("step5-fixture", step5Words.count >= 10, "only \(step5Words.count) supplement words")
+print("=== STEP 5 EN chat/IT supplement (typed on RU layout)")
+for word in step5Words {
+  check("step5-dict", englishSet.contains(word), "\(word) missing from en.txt.gz")
+  check("step5-neg", AutoSwitchEngine.evaluate(word: word, currentLayout: .english) == .keep,
+        "\(word) typed on EN layout is not .keep")
+  let typed = AutoSwitchEngine.convert(word, to: .russian)
+  if ruFull.contains(typed) {
+    print("  step5-coll: \(word) -> \(typed) is a RU word in ru-forms.bin (excluded)")
+    continue
+  }
+  check("step5", switchesCorrectly(typed: typed, layout: .russian, expected: word),
+        "\(word) typed=\(typed) decision=\(AutoSwitchEngine.evaluate(word: typed, currentLayout: .russian))")
+}
+
+// MARK: - STEP 6: RU morphology collisions
+
+let collisionWords = ((try? String(contentsOfFile: "\(dataDir)/en-collisions.lst", encoding: .utf8)) ?? "")
+  .split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+  .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+check("step6-fixture", collisionWords.count == 17, "collision fixture has \(collisionWords.count) words")
+print("=== STEP 6 RU morphology collisions (EN words typed on RU layout)")
+for word in collisionWords {
+  let typed = AutoSwitchEngine.convert(word, to: .russian)
+  check("step6-fixture", englishSet.contains(word) && !ruCore.contains(typed)
+          && droppedForms.contains(typed) && !ruFull.contains(typed),
+        "\(word) -> \(typed) is not an EN word whose non-core RU form is listed in ru_dropped_forms.txt and absent from ru-forms.bin")
+  check("step6", switchesCorrectly(typed: typed, layout: .russian, expected: word),
+        "\(word) typed=\(typed) decision=\(AutoSwitchEngine.evaluate(word: typed, currentLayout: .russian))")
+}
+print("  dropped forms (\(droppedForms.count)): \(droppedForms)")
+let ruFreqSet = Set(ruFreq)
+for form in droppedForms {
+  check("step6-dropped", !ruFull.contains(form), "\(form) is still in ru-forms.bin")
+  check("step6-core", !ruCore.contains(form), "\(form) is a core form and must not be dropped")
+  check("step6-common", !ruFreqSet.contains(form), "\(form) is a top-20k RU frequent word")
+}
+
 // MARK: - Summary
 
 let labels = ["fixture", "step1", "step3", "step3-neg", "N1", "N2-fixture", "N2", "N3", "N4",
               "caps-roundtrip", "caps-fixture", "caps-en", "caps-punct", "caps-I", "caps-ru",
-              "caps-keep", "caps-cands", "caps-typo", "caps-ngram", "N5", "N6", "N7-fixture", "N7"]
+              "caps-keep", "caps-cands", "caps-typo", "caps-ngram", "N5", "N6", "N7-fixture", "N7",
+              "step5-fixture", "step5-dict", "step5-neg", "step5",
+              "step6-fixture", "step6", "step6-dropped", "step6-core", "step6-common"]
 print("=== SUMMARY (failing / cases)")
 var totalFailures = 0
 for label in labels {
