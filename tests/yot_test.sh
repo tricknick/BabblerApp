@@ -1,0 +1,53 @@
+#!/bin/zsh
+#
+# й/и tests: Russian words typed with "и" where "й" was meant (мои -> мой style).
+# Contract in tests/YotTests.swift.
+#
+#   ./tests/yot_test.sh
+
+set -uo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+RESOURCES="$ROOT_DIR/Babbler/Resources"
+CACHE_DIR="$ROOT_DIR/build/dict-cache"
+DATA_DIR="$ROOT_DIR/tests/data"
+WORK_DIR="$ROOT_DIR/build/yot-work"
+rm -rf "$WORK_DIR"
+mkdir -p "$WORK_DIR"
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+sed -e 's/private static func gunzip/static func testGunzipImpl/' \
+    -e 's/gunzip(compressed)/testGunzipImpl(compressed)/' \
+    "$ROOT_DIR/Babbler/LayoutDictionary.swift" > "$WORK_DIR/LayoutDictionary.swift"
+
+python3 - "$WORK_DIR/LayoutDictionary.swift" <<'PY'
+import sys
+path = sys.argv[1]
+source = open(path).read()
+hook = """  func setForTests(_ en: Set<String>, _ ru: HashedWordSet, typo: HashedWordSet) {
+    lock.lock(); english = en; russian = ru; russianTypo = typo; isLoaded = true; lock.unlock()
+  }
+  static func testGunzip(_ data: Data) -> String? { testGunzipImpl(data) }
+
+  func contains("""
+open(path, "w").write(source.replace("  func contains(", hook, 1))
+PY
+
+cp "$ROOT_DIR/Babbler/AutoSwitchEngine.swift" "$ROOT_DIR/Babbler/KeyDictionary.swift" \
+   "$ROOT_DIR/Babbler/AutoSwitchMemory.swift" "$ROOT_DIR/Babbler/PreferenceStore.swift" \
+   "$ROOT_DIR/Babbler/Key.swift" "$ROOT_DIR/Babbler/NGramModel.swift" \
+   "$ROOT_DIR/Babbler/ThemePacks.swift" "$WORK_DIR/"
+
+sources=("$WORK_DIR/LayoutDictionary.swift" "$WORK_DIR/AutoSwitchEngine.swift" \
+         "$WORK_DIR/KeyDictionary.swift" "$WORK_DIR/AutoSwitchMemory.swift" \
+         "$WORK_DIR/PreferenceStore.swift" "$WORK_DIR/Key.swift" "$WORK_DIR/NGramModel.swift" \
+         "$WORK_DIR/ThemePacks.swift")
+cp "$ROOT_DIR/tests/YotTests.swift" "$WORK_DIR/main.swift"
+
+if ! swiftc -O -o "$WORK_DIR/yot-tests" "$WORK_DIR/main.swift" "${sources[@]}"; then
+  echo "yot tests did not compile"
+  exit 1
+fi
+
+BABBLER_RESOURCES="$RESOURCES" BABBLER_DICT_CACHE="$CACHE_DIR" BABBLER_TEST_DATA="$DATA_DIR" \
+  "$WORK_DIR/yot-tests"

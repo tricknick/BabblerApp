@@ -146,6 +146,14 @@ enum AutoSwitchEngine {
 
     if dictionary.contains(converted, in: currentLayout.other) { return .exact }
 
+    // Check и→й substitutions for Russian target. When typed on EN layout,
+    // if the converted Cyrillic word is not found but replacing и with й(s)
+    // yields a word in ru-forms, treat as exact match (layout switch only).
+    // Guard: Cyrillic word must be ≥ 3 chars to avoid false positives like "tb"→"еи"→"ей".
+    if currentLayout == .english, tryYotSubstitutions(converted, dictionary: dictionary) {
+      return .exact
+    }
+
     // A Title-case word is evaluated as its lowercase form, but only the exact
     // tiers above may switch it: a typo or n-gram guess about a capitalized
     // word is far likelier to be a name or brand than a layout mistake.
@@ -484,6 +492,41 @@ enum AutoSwitchEngine {
   private static let shiftedCyrillicLeadMarkers: [Character: Character] = [
     "<": ",", ">": ".", ":": ";", "\"": "'", "{": "[", "}": "]",
   ]
+
+  /// Try и→й substitutions for a Russian target. Returns true if any substitution
+  /// yields a word in the full ru-forms dictionary. Only tries if the word has ≤ 3 и's
+  /// (to keep the search space small) and is ≥ 3 chars (guard against false positives).
+  private static func tryYotSubstitutions(
+    _ word: String, dictionary: LayoutDictionary
+  ) -> Bool {
+    // Normalize ё→е consistently with exact lookup.
+    let normalized = word.replacingOccurrences(of: "ё", with: "е")
+
+    guard normalized.count >= 3 else { return false }
+
+    let chars = Array(normalized)
+    let positions = chars.indices.filter { chars[$0] == "и" }
+
+    // Skip if more than 3 и's: combinatorial search space becomes too large.
+    guard positions.count <= 3, positions.count > 0 else { return false }
+
+    // Generate all 2^n - 1 non-empty substitution combinations.
+    // For each position set where и→й, build the candidate and check.
+    for mask in 1..<(1 << positions.count) {
+      var candidate = chars
+      for (bitIndex, iPos) in positions.enumerated() {
+        if (mask & (1 << bitIndex)) != 0 {
+          candidate[iPos] = "й"
+        }
+      }
+      let word = String(candidate)
+      if dictionary.contains(word, in: .russian) {
+        return true
+      }
+    }
+
+    return false
+  }
 
   /// The trimmed word and whether it should be read as Title-case, handling
   /// the `shiftedCyrillicLeadMarkers` case before the generic punctuation trim
