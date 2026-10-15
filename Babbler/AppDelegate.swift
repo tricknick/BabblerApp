@@ -171,6 +171,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             autoSwitchStats.recordUndo()
             guard let self, let layout = self.layoutBeforeAutoSwitch else { return }
             self.noteKeptWord(word, layout: layout)
+            // The user undid our correction, so any forced switch that caused
+            // it (two earlier manual swaps) no longer reflects their intent.
+            userLexicon.dropForcedSwitch(word: word, layout: layout)
         }
 
         InputSourceUtils.onKeyboardInputSourceChanged {
@@ -288,6 +291,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
       userLexicon.forget(word: word, layout: layout)
       // The swap already happened, so these words now stand in the other layout.
       sentenceContext.note(word: word, finalLayout: layout.other)
+    }
+  }
+
+  /// A manual swap of a word auto-switch had the chance to catch and left
+  /// alone: a miss worth learning from. Notes each word in the layout it was
+  /// typed in (the current layout, read before the swap). Main thread only.
+  private func noteMissedManualSwap(_ typed: String) {
+    guard let layout = currentLayout else { return }
+    for piece in typed.split(whereSeparator: { $0.isWhitespace }) {
+      let word = AutoSwitchEngine.normalize(String(piece))
+      guard !word.isEmpty else { continue }
+      userLexicon.noteManualSwap(word: word, layout: layout)
     }
   }
 
@@ -539,6 +554,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 keptWordPending: !autoSwitchTail.isEmpty
             ) {
                 autoSwitchStats.recordManualSwap()
+                noteMissedManualSwap(actionResult == .lineAction ? lineText : text)
             }
             resetAutoSwitchBuffers()
             forgetManuallySwapped(actionResult == .lineAction ? lineText : text)

@@ -179,6 +179,12 @@ for word in ruFreq {
         "RU word switched on RU layout: \(word) -> \(AutoSwitchEngine.convert(word, to: .english))")
 }
 
+// A Russian word followed by real punctuation typed on the Russian layout stays put.
+for word in ["руки,", "руке,", "рут,", "еще,", "руки.", "руки!"] {
+  check("N1-punct", AutoSwitchEngine.evaluate(word: word, currentLayout: .russian) == .keep,
+        "RU word with punctuation switched: \(word)")
+}
+
 let ruEndings: Set<Character> = ["ю", "б", "ж", "э", "х", "ъ"]
 print("N1 pre-existing excluded: \(n1Excluded)")
 var dataWords = Set<String>()

@@ -75,10 +75,16 @@ LayoutDictionary.shared.setNGramModels(english: shippedEnglishModel, russian: sh
 final class FakeUserLexiconStore: UserLexiconStore {
   var keeps: [String: Int] = [:]
   var learned: [String] = []
+  var forcedPending: [String: Int] = [:]
+  var forced: [String] = []
   func userLexiconKeeps() -> [String: Int] { keeps }
   func setUserLexiconKeeps(_ keeps: [String: Int]) { self.keeps = keeps }
   func userLexiconLearned() -> [String] { learned }
   func setUserLexiconLearned(_ entries: [String]) { learned = entries }
+  func userLexiconForcedPending() -> [String: Int] { forcedPending }
+  func setUserLexiconForcedPending(_ pending: [String: Int]) { forcedPending = pending }
+  func userLexiconForced() -> [String] { forced }
+  func setUserLexiconForced(_ entries: [String]) { forced = entries }
 }
 
 func freshLexicon() -> (lexicon: UserLexicon, store: FakeUserLexiconStore) {

@@ -537,6 +537,22 @@ The engine never references `UserLexicon` directly — like theme packs, it
 only holds a closure (`AutoSwitchEngine.userLexiconContains`) so that
 `AutoSwitchEngine.swift` compiles standalone without the lexicon present.
 
+### Learning from manual swaps
+
+The opposite signal: a word the user manually swaps with the action key twice
+(`noteManualSwap`, promoted at the same `promoteThreshold`) is **forced** —
+from then on, typing it in the layout it was swapped out of is always treated
+as an exact match for the other layout, overriding even a word that is
+correctly spelled where it stands. A keep and a force contradict each other,
+so noting one cancels any pending or learned entry for the other signal on
+the same word and layout. Undoing the auto-switch that a forced word then
+causes removes the force (`dropForcedSwitch`), so the same mistake does not
+keep re-forcing itself. Persisted under `userLexiconForcedPending`/
+`userLexiconForced`, capped and evicted the same way as the keep set, and
+wired into the engine through a second closure,
+`AutoSwitchEngine.userLexiconForces`. Settings shows the count alongside the
+learned-word count, and Reset clears both.
+
 ## Character n-gram language model (last tier)
 
 A lookup can never judge a word it has not seen: derived, colloquial and nonce

@@ -8,6 +8,10 @@ protocol UserLexiconStore: AnyObject {
   func setUserLexiconKeeps(_ keeps: [String: Int])
   func userLexiconLearned() -> [String]
   func setUserLexiconLearned(_ entries: [String])
+  func userLexiconForcedPending() -> [String: Int]
+  func setUserLexiconForcedPending(_ pending: [String: Int])
+  func userLexiconForced() -> [String]
+  func setUserLexiconForced(_ entries: [String])
 }
 
 /// Learns words the user keeps typing in a layout that are not in the built-in
@@ -27,6 +31,10 @@ final class UserLexicon {
   static let maxEntries = 5000
   /// Upper bound on pending keep counts; the oldest are evicted first.
   static let maxPending = 5000
+  /// Upper bound on learned forced-switch entries; the oldest are evicted first.
+  static let maxForcedEntries = 5000
+  /// Upper bound on pending manual-swap counts; the oldest are evicted first.
+  static let maxForcedPending = 5000
 
   private let store: UserLexiconStore
   // Keyed by a composite "layout:word" string so the same letters typed in
@@ -38,6 +46,13 @@ final class UserLexicon {
   // Composite keys, oldest first; drives both membership and eviction order.
   private var learned: [String]
   private var learnedSet: Set<String>
+  // Manual-swap counts not yet promoted to a forced switch. Same composite-key
+  // scheme and eviction strategy as keepCounts/pendingOrder.
+  private var forcedPendingCounts: [String: Int]
+  private var forcedPendingOrder: [String]
+  // Learned forced-switch entries, oldest first.
+  private var forced: [String]
+  private var forcedSet: Set<String>
 
   init(store: UserLexiconStore) {
     self.store = store
@@ -45,6 +60,10 @@ final class UserLexicon {
     self.pendingOrder = keepCounts.keys.sorted()
     self.learned = store.userLexiconLearned()
     self.learnedSet = Set(learned)
+    self.forcedPendingCounts = store.userLexiconForcedPending()
+    self.forcedPendingOrder = forcedPendingCounts.keys.sorted()
+    self.forced = store.userLexiconForced()
+    self.forcedSet = Set(forced)
   }
 
   /// Reads `userLexiconEnabledKey` (PreferenceStore.swift); absent means on.
@@ -54,17 +73,30 @@ final class UserLexicon {
   }
 
   var learnedCount: Int { learned.count }
+  /// Learned forced-switch entries (not pending).
+  var forcedCount: Int { forced.count }
 
   /// Case-insensitive membership test for a word in a layout.
   func contains(_ word: String, in layout: Layout) -> Bool {
     learnedSet.contains(compositeKey(word, layout))
   }
 
+  /// Case-insensitive test for whether `word` typed in `layout` has been
+  /// learned as a manual swap: the user keeps correcting it to the other
+  /// layout, so the engine should switch it even when it is a real word
+  /// where it stands, or in no dictionary at all.
+  func forcesSwitch(_ word: String, from layout: Layout) -> Bool {
+    forcedSet.contains(compositeKey(word, layout))
+  }
+
   /// A word was typed in `layout`, reached a word boundary, and was not
-  /// corrected. Counts towards promotion; invalid words are ignored.
+  /// corrected. Counts towards promotion; invalid words are ignored. Also
+  /// cancels any forced switch learned for the same word and layout — the
+  /// user keeping it is evidence it should not be auto-switched any more.
   func noteKept(word: String, layout: Layout) {
     guard Self.isValidWord(word) else { return }
     let key = compositeKey(word, layout)
+    removeForcedEntry(key)
     guard !learnedSet.contains(key) else { return }
 
     let count = (keepCounts[key] ?? 0) + 1
@@ -83,18 +115,39 @@ final class UserLexicon {
   /// it is not a word they want kept. Drops its pending count and its learned
   /// entry for that layout only. A no-op for unknown words.
   func forget(word: String, layout: Layout) {
-    let key = compositeKey(word, layout)
-    let hadPending = keepCounts[key] != nil
-    let wasLearned = learnedSet.contains(key)
-    guard hadPending || wasLearned else { return }
+    removeKeepEntry(compositeKey(word, layout))
+  }
 
-    if hadPending { removePending(key) }
-    if wasLearned {
-      learned.removeAll { $0 == key }
-      learnedSet.remove(key)
+  /// The user manually swapped `word` out of `layout` with the action key —
+  /// a stronger, opposite signal from `noteKept`: this spelling, in this
+  /// layout, is not what they meant. Counts towards forcing an auto-switch;
+  /// invalid words and a disabled lexicon are ignored. Also clears any keep
+  /// learned for the same word and layout, since the two signals contradict
+  /// each other and the more recent one wins.
+  func noteManualSwap(word: String, layout: Layout) {
+    guard Self.isEnabled() else { return }
+    guard Self.isValidWord(word) else { return }
+    let key = compositeKey(word, layout)
+    removeKeepEntry(key)
+    guard !forcedSet.contains(key) else { return }
+
+    let count = (forcedPendingCounts[key] ?? 0) + 1
+    if count >= Self.promoteThreshold {
+      removeForcedPending(key)
+      promoteForced(key)
+    } else {
+      if forcedPendingCounts[key] == nil { addForcedPending(key) }
+      forcedPendingCounts[key] = count
     }
-    store.setUserLexiconKeeps(keepCounts)
-    store.setUserLexiconLearned(learned)
+    store.setUserLexiconForcedPending(forcedPendingCounts)
+    store.setUserLexiconForced(forced)
+  }
+
+  /// Removes a learned or pending forced switch for `word` in `layout`. Used
+  /// when an auto-switch the user forced is then undone, so the same mistake
+  /// does not immediately re-force itself.
+  func dropForcedSwitch(word: String, layout: Layout) {
+    removeForcedEntry(compositeKey(word, layout))
   }
 
   /// Imports a newline-separated spelling file (LF or CRLF). Cyrillic lines are
@@ -122,14 +175,21 @@ final class UserLexicon {
     store.setUserLexiconLearned(learned)
   }
 
-  /// Clears every learned word and keep count.
+  /// Clears every learned word and keep count, and every forced switch and
+  /// pending manual-swap count.
   func reset() {
     keepCounts = [:]
     pendingOrder = []
     learned = []
     learnedSet = []
+    forcedPendingCounts = [:]
+    forcedPendingOrder = []
+    forced = []
+    forcedSet = []
     store.setUserLexiconKeeps(keepCounts)
     store.setUserLexiconLearned(learned)
+    store.setUserLexiconForcedPending(forcedPendingCounts)
+    store.setUserLexiconForced(forced)
   }
 
   // MARK: - Helpers
@@ -163,6 +223,65 @@ final class UserLexicon {
       let evicted = learned.removeFirst()
       learnedSet.remove(evicted)
     }
+  }
+
+  /// Removes any pending keep count and any learned keep for `key`, the same
+  /// logic `forget` and `noteManualSwap` both need. A no-op if neither exists.
+  private func removeKeepEntry(_ key: String) {
+    let hadPending = keepCounts[key] != nil
+    let wasLearned = learnedSet.contains(key)
+    guard hadPending || wasLearned else { return }
+
+    if hadPending { removePending(key) }
+    if wasLearned {
+      learned.removeAll { $0 == key }
+      learnedSet.remove(key)
+    }
+    store.setUserLexiconKeeps(keepCounts)
+    store.setUserLexiconLearned(learned)
+  }
+
+  /// Starts tracking a new pending manual-swap key, evicting the oldest
+  /// pending keys first so the count stays within `maxForcedPending`.
+  private func addForcedPending(_ key: String) {
+    while forcedPendingOrder.count >= Self.maxForcedPending, let oldest = forcedPendingOrder.first {
+      forcedPendingOrder.removeFirst()
+      forcedPendingCounts.removeValue(forKey: oldest)
+    }
+    forcedPendingOrder.append(key)
+  }
+
+  private func removeForcedPending(_ key: String) {
+    forcedPendingCounts.removeValue(forKey: key)
+    forcedPendingOrder.removeAll { $0 == key }
+  }
+
+  /// Appends a newly forced key, evicting the oldest entry once the cap is
+  /// exceeded. A no-op if the key is already forced.
+  private func promoteForced(_ key: String) {
+    guard !forcedSet.contains(key) else { return }
+    forced.append(key)
+    forcedSet.insert(key)
+    if forced.count > Self.maxForcedEntries {
+      let evicted = forced.removeFirst()
+      forcedSet.remove(evicted)
+    }
+  }
+
+  /// Removes any pending manual-swap count and any learned forced switch for
+  /// `key`. A no-op if neither exists.
+  private func removeForcedEntry(_ key: String) {
+    let hadPending = forcedPendingCounts[key] != nil
+    let wasForced = forcedSet.contains(key)
+    guard hadPending || wasForced else { return }
+
+    if hadPending { removeForcedPending(key) }
+    if wasForced {
+      forced.removeAll { $0 == key }
+      forcedSet.remove(key)
+    }
+    store.setUserLexiconForcedPending(forcedPendingCounts)
+    store.setUserLexiconForced(forced)
   }
 
   /// Short words are too ambiguous to judge, and a word with a digit or a
@@ -210,10 +329,31 @@ extension PreferenceStore: UserLexiconStore {
   func setUserLexiconLearned(_ entries: [String]) {
     defaults.set(entries, forKey: userLexiconLearnedKey)
   }
+
+  /// Manual-swap counts per composite "layout:word" key, not yet promoted to
+  /// a forced switch.
+  func userLexiconForcedPending() -> [String: Int] {
+    (defaults.dictionary(forKey: userLexiconForcedPendingKey) as? [String: Int]) ?? [:]
+  }
+
+  func setUserLexiconForcedPending(_ pending: [String: Int]) {
+    defaults.set(pending, forKey: userLexiconForcedPendingKey)
+  }
+
+  /// Learned forced-switch composite keys, oldest first.
+  func userLexiconForced() -> [String] {
+    defaults.stringArray(forKey: userLexiconForcedKey) ?? []
+  }
+
+  func setUserLexiconForced(_ entries: [String]) {
+    defaults.set(entries, forKey: userLexiconForcedKey)
+  }
 }
 
 private let userLexiconKeepsKey = "userLexiconKeeps"
 private let userLexiconLearnedKey = "userLexiconLearned"
+private let userLexiconForcedPendingKey = "userLexiconForcedPending"
+private let userLexiconForcedKey = "userLexiconForced"
 
 /// The lexicon the engine checks. Lives here rather than in AutoSwitchEngine so
 /// that engine builds without this file (the dictionary test harness) still
@@ -227,6 +367,10 @@ extension AutoSwitchEngine {
         { word, layout in lexicon.contains(word, in: layout) }
       }
       userLexiconContains = contains
+      let forces: ((String, Layout) -> Bool)? = newValue.map { lexicon in
+        { word, layout in lexicon.forcesSwitch(word, from: layout) }
+      }
+      userLexiconForces = forces
     }
   }
 }

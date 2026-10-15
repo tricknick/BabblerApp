@@ -64,6 +64,7 @@ struct SettingsView: View {
     @State private var learnedWords: [String] = []
     @AppStorage(userLexiconEnabledKey) private var userLexiconEnabled: Bool = true
     @State private var learnedLexiconCount: Int = 0
+    @State private var forcedLexiconCount: Int = 0
     @State private var vocabularyExpanded = false
     @ObservedObject private var stats = autoSwitchStats
 
@@ -213,11 +214,13 @@ struct SettingsView: View {
                         Button("Reset") {
                             userLexicon.reset()
                             learnedLexiconCount = userLexicon.learnedCount
+                            forcedLexiconCount = userLexicon.forcedCount
                         }
-                        .disabled(learnedLexiconCount == 0)
+                        .disabled(learnedLexiconCount == 0 && forcedLexiconCount == 0)
                     } label: {
                         Text("Learned words")
                         Text(learnedLexiconCount == 0 ? "None yet" : "\(learnedLexiconCount) words")
+                        Text(forcedLexiconCount == 0 ? "auto-switch: none" : "auto-switch: \(forcedLexiconCount)")
                     }
                     LabeledContent {
                         Button("Forget") {
@@ -321,6 +324,7 @@ struct SettingsView: View {
             learnedWords = autoSwitchMemory.learnedWords
             enabledThemePacks = ThemePacks.enabledIds()
             learnedLexiconCount = userLexicon.learnedCount
+            forcedLexiconCount = userLexicon.forcedCount
         }
         .onChange(of: autoSwitchEnabled) { _, newValue in
             // Loading the word lists takes ~150 ms, so start as soon as it is enabled

@@ -1,0 +1,75 @@
+#!/bin/zsh
+#
+# Learn-from-manual-swaps checks: two manual swaps of the same typed word out of
+# the same layout promote it to a forced auto-switch (see the API contract in
+# tests/LearnSwapTests.swift).
+#
+#   ./tests/learn_swap_test.sh
+
+set -uo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+RESOURCES="$ROOT_DIR/Babbler/Resources"
+WORK_DIR="$ROOT_DIR/build/learn-swap-test-work"
+rm -rf "$WORK_DIR"
+mkdir -p "$WORK_DIR"
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+failures=0
+
+# Same LayoutDictionary harness patch as tests/lexicon_test.sh.
+sed -e 's/private static func gunzip/static func testGunzipImpl/' \
+    -e 's/gunzip(compressed)/testGunzipImpl(compressed)/' \
+    "$ROOT_DIR/Babbler/LayoutDictionary.swift" > "$WORK_DIR/LayoutDictionary.swift"
+
+python3 - "$WORK_DIR/LayoutDictionary.swift" <<'PY'
+import sys
+path = sys.argv[1]
+source = open(path).read()
+hook = """  func setForTests(_ en: Set<String>, _ ru: HashedWordSet, typo: HashedWordSet) {
+    lock.lock(); english = en; russian = ru; russianTypo = typo; isLoaded = true
+    commonEnglish = Self.testLoadWords("common-en"); commonRussian = Self.testLoadWords("common-ru"); lock.unlock()
+  }
+  static func testLoadWords(_ name: String) -> Set<String> {
+    guard let dir = ProcessInfo.processInfo.environment["BABBLER_RESOURCES"],
+          let data = try? Data(contentsOf: URL(fileURLWithPath: dir).appendingPathComponent(name + ".txt.gz")),
+          let text = testGunzipImpl(data) else { return [] }
+    return Set(text.split(whereSeparator: { $0.isNewline }).map(String.init))
+  }
+  static func testGunzip(_ data: Data) -> String? { testGunzipImpl(data) }
+
+  func contains("""
+open(path, "w").write(source.replace("  func contains(", hook, 1))
+PY
+
+cp "$ROOT_DIR/Babbler/AutoSwitchEngine.swift" "$ROOT_DIR/Babbler/KeyDictionary.swift" \
+   "$ROOT_DIR/Babbler/AutoSwitchMemory.swift" "$ROOT_DIR/Babbler/PreferenceStore.swift" \
+   "$ROOT_DIR/Babbler/Key.swift" "$ROOT_DIR/Babbler/NGramModel.swift" "$WORK_DIR/"
+
+sources=("$WORK_DIR/LayoutDictionary.swift" "$WORK_DIR/AutoSwitchEngine.swift" \
+         "$WORK_DIR/KeyDictionary.swift" "$WORK_DIR/AutoSwitchMemory.swift" \
+         "$WORK_DIR/PreferenceStore.swift" "$WORK_DIR/Key.swift" "$WORK_DIR/NGramModel.swift")
+if [[ -f "$ROOT_DIR/Babbler/ThemePacks.swift" ]]; then
+  cp "$ROOT_DIR/Babbler/ThemePacks.swift" "$WORK_DIR/"
+  sources+=("$WORK_DIR/ThemePacks.swift")
+fi
+for f in "$ROOT_DIR"/Babbler/UserLexicon*.swift(N); do
+  cp "$f" "$WORK_DIR/"
+  sources+=("$WORK_DIR/${f:t}")
+done
+cp "$ROOT_DIR/tests/LearnSwapTests.swift" "$WORK_DIR/main.swift"
+
+echo "=== compile and run tests/LearnSwapTests.swift"
+if ! swiftc -O -o "$WORK_DIR/learn-swap-tests" "$WORK_DIR/main.swift" "${sources[@]}"; then
+  echo "  FAIL  LearnSwapTests.swift did not compile (learn-from-swaps implementation missing or incomplete)"
+  failures=$((failures + 1))
+else
+  BABBLER_RESOURCES="$RESOURCES" BABBLER_TEST_WORK="$WORK_DIR" "$WORK_DIR/learn-swap-tests" || failures=$((failures + 1))
+fi
+
+if (( failures == 0 )); then
+  echo "ALL LEARN-SWAP CHECKS PASS"
+else
+  echo "$failures LEARN-SWAP CHECK GROUP(S) FAILED"
+  exit 1
+fi

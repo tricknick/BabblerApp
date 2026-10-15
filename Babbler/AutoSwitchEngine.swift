@@ -113,6 +113,16 @@ enum AutoSwitchEngine {
 
     let word = trimmed.lowercased()
 
+    // The user has manually swapped this exact word out of this layout often
+    // enough to force it: skip the dictionary tiers below entirely, since a
+    // forced switch overrides even a word that reads fine where it stands.
+    if isUserLexiconForced(word, from: currentLayout) {
+      let forcedTarget = convert(word, to: currentLayout.other)
+      if forcedTarget != word, forcedTarget.rangeOfCharacter(from: CharacterSet.letters.inverted) == nil {
+        return .exact
+      }
+    }
+
     // Already a real word where it stands — leave it alone.
     if dictionary.contains(word, in: currentLayout) { return nil }
 
@@ -328,6 +338,16 @@ enum AutoSwitchEngine {
     userLexiconContains?(word, target) ?? false
   }
 
+  /// Forced-switch test for the user's learned lexicon: a word the user keeps
+  /// manually swapping out of a layout, typed in that same layout. Set
+  /// through `AutoSwitchEngine.userLexicon` (UserLexicon.swift); nil means no
+  /// lexicon.
+  static var userLexiconForces: ((String, Layout) -> Bool)?
+
+  private static func isUserLexiconForced(_ word: String, from layout: Layout) -> Bool {
+    userLexiconForces?(word, layout) ?? false
+  }
+
   /// Whether a typed token is a URL, email, path, mention, hashtag, shell
   /// variable or code identifier. Checks the characters as typed in the current
   /// layout, never a conversion of them.
@@ -370,9 +390,13 @@ enum AutoSwitchEngine {
   /// are rejected so they fall through to the usual eligibility checks and stay put.
   private static func isPunctuatedEnglishHit(_ rawWord: String, dictionary: LayoutDictionary) -> Bool {
     // A real Russian word keeps the usual answer, even if it ends in ю, б, ж, э or х.
+    // On the Russian layout `,` and `.` are real punctuation, so "руки," is "руки".
     let russianWord = rawWord.trimmingCharacters(in: trimmableCharacters).lowercased()
-    if dictionary.contains(russianWord, in: .russian) { return false }
-    if isUserLexiconHit(russianWord, target: .russian) { return false }
+    let russianStem = russianWord.trimmingCharacters(in: englishTrailingPunctuation)
+    for candidate in Set([russianWord, russianStem]) where !candidate.isEmpty {
+      if dictionary.contains(candidate, in: .russian) { return false }
+      if isUserLexiconHit(candidate, target: .russian) { return false }
+    }
     guard rawWord.rangeOfCharacter(from: disqualifyingCharacters) == nil else { return false }
 
     var scalars = Array(convert(rawWord, to: .english).unicodeScalars)
