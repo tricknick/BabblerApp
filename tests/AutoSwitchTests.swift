@@ -135,7 +135,7 @@ for (typed, layout) in [("ghbdtn", Layout.english), ("rjvgm.nth", .english), ("h
 
 print("=== rejections")
 for (word, layout) in [("ok", Layout.english), ("abc123", .english), ("user@host.com", .english),
-                       ("Ghbdtn", .english), ("src/main", .english), ("hello", .english),
+                       ("GHBDTN", .english), ("src/main", .english), ("hello", .english),
                        ("привет", .russian)] {
   check(AutoSwitchEngine.evaluate(word: word, currentLayout: layout) == .keep,
         "\(word) must be kept")
@@ -711,7 +711,7 @@ for typed in ["asdfgh", "qwertyuiop", "йцукенгш", "фывапролдж"
   let layout: Layout = typed.unicodeScalars.contains { $0.value > 0x7f } ? .russian : .english
   check(AutoSwitchEngine.evaluate(word: typed, currentLayout: layout) == .keep, "\(typed) must be kept")
 }
-for typed in [";jgtwrbq_v2", "grafana2", "Ghbdtn", ";jgtwrbq@mail", "/,bpytc", ",bpytc.exe/"] {
+for typed in [";jgtwrbq_v2", "grafana2", "GHBDTN", ";jgtwrbq@mail", "/,bpytc", ",bpytc.exe/"] {
   check(AutoSwitchEngine.evaluate(word: typed, currentLayout: .english) == .keep,
         "\(typed) must be kept")
 }

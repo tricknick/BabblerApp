@@ -257,6 +257,12 @@ let realCauses = Tally()
 var realTokens = 0, realCorrect = 0
 var realByKind: [String: Int] = [:]
 var realWrongSwitches: [String] = []
+// Title-case contract (STEP 2): a Title-case word switches only via exact tiers, on its lowercase form.
+func isTitleCaseWord(_ token: String) -> Bool {
+  guard let first = token.first, first.isUppercase, token.filter({ $0.isLetter }).count >= 3 else { return false }
+  return !token.dropFirst().contains(where: { $0.isUppercase })
+}
+var realCapsPasses = 0
 for sentence in sentences {
   let tokensList = sentence.split(separator: " ").map(String.init)
   var layout = Layout.russian
@@ -267,7 +273,11 @@ for sentence in sentences {
   for (index, token) in tokensList.enumerated() {
     let typed = layout == .russian ? AutoSwitchEngine.convert(token, to: .russian) : token
     typedOf[index] = typed
-    let switched = AutoSwitchEngine.evaluate(word: typed, currentLayout: layout) == .switchLayout
+    let lowerTyped = AutoSwitchEngine.convert(token.lowercased(), to: .russian)
+    let capsSwitch = layout == .russian && isTitleCaseWord(token)
+      && AutoSwitchEngine.matchTier(word: lowerTyped, currentLayout: .russian) == .exact
+    if capsSwitch { realCapsPasses += 1 }
+    let switched = capsSwitch || AutoSwitchEngine.evaluate(word: typed, currentLayout: layout) == .switchLayout
     if !switched {
       if layout == .english {
         correct[index] = true
@@ -311,6 +321,7 @@ for sentence in sentences {
   }
 }
 print("    tokens \(realTokens)  correct \(realCorrect) (\(realCorrect * 100 / realTokens)%)  wrong-switch \(realWrongSwitches.count)")
+print("    Title-case words passing via exact tiers under the caps contract: \(realCapsPasses)")
 print("    correct by path: \(realByKind.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", "))")
 print("    wrong switches: \(realWrongSwitches.joined(separator: ", "))")
 realCauses.report()

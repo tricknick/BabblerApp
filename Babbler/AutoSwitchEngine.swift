@@ -106,8 +106,10 @@ enum AutoSwitchEngine {
       return .exact
     }
 
-    let trimmed = rawWord.trimmingCharacters(in: trimmableCharacters)
-    guard isEligible(trimmed), !looksLikeCodeOrAddress(trimmed) else { return nil }
+    let (trimmed, titleCase) = titleCaseCandidate(rawWord, currentLayout: currentLayout)
+    guard isEligible(trimmed, allowTitleCase: titleCase), !looksLikeCodeOrAddress(trimmed) else {
+      return nil
+    }
 
     let word = trimmed.lowercased()
 
@@ -143,6 +145,11 @@ enum AutoSwitchEngine {
     }
 
     if dictionary.contains(converted, in: currentLayout.other) { return .exact }
+
+    // A Title-case word is evaluated as its lowercase form, but only the exact
+    // tiers above may switch it: a typo or n-gram guess about a capitalized
+    // word is far likelier to be a name or brand than a layout mistake.
+    if titleCase { return nil }
 
     // A sentence firmly anchored in the current layout (three or more words
     // running) is strong enough evidence on its own that the bottom two tiers,
@@ -347,6 +354,9 @@ enum AutoSwitchEngine {
   /// English-target only. A Russian-layout run that converts to an English word
   /// with up to two trailing punctuation marks, or to a whitelisted contraction.
   /// Judged on the exact dictionary alone, so no typo or n-gram tier applies.
+  /// The stem may be all-lowercase or Title-case ("Hello,", "I'm") — the lookup
+  /// always happens on its lowercase form, but ALL-CAPS and mixed case ("JSON,")
+  /// are rejected so they fall through to the usual eligibility checks and stay put.
   private static func isPunctuatedEnglishHit(_ rawWord: String, dictionary: LayoutDictionary) -> Bool {
     // A real Russian word keeps the usual answer, even if it ends in ю, б, ж, э or х.
     let russianWord = rawWord.trimmingCharacters(in: trimmableCharacters).lowercased()
@@ -361,16 +371,17 @@ enum AutoSwitchEngine {
       stripped += 1
     }
     let stem = String(String.UnicodeScalarView(scalars))
+    guard stem == stem.lowercased() || isTitleCase(stem) else { return false }
+    let lowerStem = stem.lowercased()
 
-    if englishContractions.contains(stem) { return true }
+    if englishContractions.contains(lowerStem) { return true }
 
     guard stripped > 0,
-          stem.count >= 3,
-          stem.rangeOfCharacter(from: CharacterSet.letters.inverted) == nil,
-          stem == stem.lowercased(),
-          !looksLikeCodeOrAddress(stem)
+          lowerStem.count >= 3,
+          lowerStem.rangeOfCharacter(from: CharacterSet.letters.inverted) == nil,
+          !looksLikeCodeOrAddress(lowerStem)
     else { return false }
-    return dictionary.contains(stem, in: .english)
+    return dictionary.contains(lowerStem, in: .english)
   }
 
   private static func hasAmbiguousTrailing(_ word: String) -> Bool {
@@ -437,7 +448,7 @@ enum AutoSwitchEngine {
     return text.map { mapper[String($0)] ?? String($0) }.joined()
   }
 
-  private static func isEligible(_ word: String) -> Bool {
+  private static func isEligible(_ word: String, allowTitleCase: Bool) -> Bool {
     // Too short to judge: "ok", "hi", "и", "не".
     if word.count < 3 { return false }
 
@@ -447,9 +458,48 @@ enum AutoSwitchEngine {
     if word.rangeOfCharacter(from: disqualifyingCharacters) != nil { return false }
 
     // Proper nouns and acronyms are often missing from the word lists, and
-    // rewriting a name is very visible. Any capital disqualifies.
-    if word != word.lowercased() { return false }
+    // rewriting a name is very visible. Any capital disqualifies, except a
+    // Title-case word ("Hello", "Привет"), which the caller evaluates as its
+    // lowercase form through the exact tiers only. ALL-CAPS and mixed case
+    // ("JSON", "iPhone") are not Title-case and stay disqualified.
+    if word != word.lowercased() && !allowTitleCase { return false }
 
     return true
+  }
+
+  /// True when `word` starts with an uppercase letter and has no other
+  /// uppercase letters — "Hello", "I'm", "Привет". False for ALL-CAPS
+  /// ("JSON"), mixed case ("iPhone", "GitHub"), and all-lowercase words.
+  private static func isTitleCase(_ word: String) -> Bool {
+    guard let first = word.first, first.isUppercase else { return false }
+    return word.dropFirst().allSatisfy { !$0.isUppercase }
+  }
+
+  /// б, ю, ж, э, х, ъ sit on the keys that type , . ; ' [ ] on the English
+  /// layout (see `KeyDictionary.swift`). Their capitals are therefore the
+  /// *shifted* symbol above those keys — < > : " { } — not an uppercase Latin
+  /// letter, so a Title-case Russian word starting with one of them arrives,
+  /// misread as English, as that symbol followed by lowercase letters. Maps
+  /// each symbol back to the key's unshifted (lowercase) form.
+  private static let shiftedCyrillicLeadMarkers: [Character: Character] = [
+    "<": ",", ">": ".", ":": ";", "\"": "'", "{": "[", "}": "]",
+  ]
+
+  /// The trimmed word and whether it should be read as Title-case, handling
+  /// the `shiftedCyrillicLeadMarkers` case before the generic punctuation trim
+  /// (which would otherwise either discard the leading `"` outright or have
+  /// `isEligible` reject `<`/`>`/`{`/`}`/`:` as code).
+  private static func titleCaseCandidate(
+    _ rawWord: String, currentLayout: Layout
+  ) -> (trimmed: String, titleCase: Bool) {
+    if currentLayout == .english, let first = rawWord.first,
+       let unshifted = shiftedCyrillicLeadMarkers[first] {
+      let rest = rawWord.dropFirst().trimmingCharacters(in: trimmableCharacters)
+      if rest.count >= 2, rest.allSatisfy({ ("a"..."z").contains($0) }) {
+        return (String(unshifted) + rest, true)
+      }
+    }
+    let trimmed = rawWord.trimmingCharacters(in: trimmableCharacters)
+    return (trimmed, isTitleCase(trimmed))
   }
 }

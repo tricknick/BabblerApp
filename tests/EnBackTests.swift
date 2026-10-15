@@ -14,6 +14,16 @@ import Foundation
 // STEP 3 (contractions): 45 whitelisted lowercase contractions with ' (-> э) must switch;
 //   10 whitelisted contraction+punctuation strings must switch; non-whitelisted
 //   apostrophe strings must stay .keep ("step3-neg").
+// STEP 2 (capitalized words, both directions). Contract:
+//   A Title-case word (first letter upper, rest lower, >= 3 letters) is evaluated as its
+//   lowercase form. It may switch ONLY via exact tiers (dictionary, theme pack, user
+//   lexicon, punctuation/contraction rule), never via typo or n-gram. The replacement keeps
+//   the case: convert() maps upper <-> upper, so convert(convert(w, to: x), to: back) == w.
+//   ALL-CAPS and mixed case (JSON, iPhone, GitHub, ПРИВЕТ, ВКонтакте) stay .keep.
+//   Positives: EN Title-case on RU layout (words, with trailing punctuation, I-contractions),
+//   RU Title-case on EN layout. Negatives: Title-case of 20k frequent RU/EN words in their
+//   native layout (N5/N6), proper-noun list in native layout (N7), and Title-case of
+//   misspellings that only typo/n-gram tiers would catch (caps-typo).
 // NEGATIVES (must keep passing):
 //   N1  20k most frequent RU words typed on RU layout stay .keep (build/dict-cache/ru_freq.txt)
 //   N2  RU words in tests/data/*.txt ending in ю б ж э х ъ typed on RU layout stay .keep
@@ -191,9 +201,141 @@ for word in enFreq {
 check("N4", n4Correct >= 19345, "EN-on-RU correct \(n4Correct) < floor 19345")
 print("  N4 EN-on-RU correct: \(n4Correct) / \(enFreq.count)")
 
+// MARK: - STEP 2: capitalized words
+
+func titleCase(_ s: String) -> String {
+  guard let first = s.first else { return s }
+  return String(first).uppercased() + String(s.dropFirst())
+}
+
+print("=== STEP 2 capitalized words")
+for word in ["Hello", "Monday", "I'm", "JSON", "The", "London"] {
+  let back = AutoSwitchEngine.convert(AutoSwitchEngine.convert(word, to: .russian), to: .english)
+  check("caps-roundtrip", back == word, "EN round-trip \(word) -> \(back)")
+}
+for word in ["Привет", "Спасибо", "Москва", "ОК"] {
+  let back = AutoSwitchEngine.convert(AutoSwitchEngine.convert(word, to: .english), to: .russian)
+  check("caps-roundtrip", back == word, "RU round-trip \(word) -> \(back)")
+}
+check("caps-roundtrip", AutoSwitchEngine.convert("Hello", to: .russian) == "Руддщ",
+      "Hello -> \(AutoSwitchEngine.convert("Hello", to: .russian))")
+
+let enCapsWords = [
+  "Hello", "Monday", "Please", "Thanks", "Because", "People", "Everyone", "Commit", "Deploy",
+  "Merge", "Update", "Change", "These", "Through", "Example", "Another", "After", "Should",
+  "Could", "Think", "First", "Going", "Around", "Great", "Problem", "Together", "Brother",
+  "Mountain", "Pattern", "Library", "Kitchen", "London", "The", "Can", "She",
+]
+for (i, word) in enCapsWords.enumerated() {
+  let lower = word.lowercased()
+  check("caps-fixture", englishSet.contains(lower) && lower.count >= 3, "not an EN fixture: \(word)")
+  let suffix = i % 3 == 0 ? "" : punctSuffixes[i % punctSuffixes.count]
+  let intended = word + suffix
+  let typed = AutoSwitchEngine.convert(intended, to: .russian)
+  check(suffix.isEmpty ? "caps-en" : "caps-punct",
+        switchesCorrectly(typed: typed, layout: .russian, expected: intended),
+        "\(intended) typed=\(typed) decision=\(AutoSwitchEngine.evaluate(word: typed, currentLayout: .russian))")
+}
+
+for word in ["I'm", "I'll", "I've", "I'd", "I'm.", "I'll!"] {
+  let typed = AutoSwitchEngine.convert(word, to: .russian)
+  check("caps-I", switchesCorrectly(typed: typed, layout: .russian, expected: word),
+        "\(word) typed=\(typed) decision=\(AutoSwitchEngine.evaluate(word: typed, currentLayout: .russian))")
+}
+
+let ruCapsFixed = ["Привет", "Спасибо", "Москва", "Как", "Сегодня", "Работа"]
+let ruCapsFreq = Array(ruFreq.filter {
+  $0.count >= 3 && !englishSet.contains(AutoSwitchEngine.convert($0, to: .english))
+}.prefix(40))
+for word in ruCapsFixed + ruCapsFreq {
+  let titled = titleCase(word)
+  check("caps-fixture", LayoutDictionary.shared.contains(word.lowercased(), in: .russian), "not an RU fixture: \(word)")
+  let typed = AutoSwitchEngine.convert(titled, to: .english)
+  check("caps-ru", switchesCorrectly(typed: typed, layout: .english, expected: titled),
+        "\(titled) typed=\(typed) decision=\(AutoSwitchEngine.evaluate(word: typed, currentLayout: .english))")
+}
+
+let capsKeepEN = ["JSON", "API", "iPhone", "GitHub", "NASA", "HTML", "CPU", "SQL", "URL", "README",
+                  "iOS", "macOS", "McDonald", "JavaScript", "PostgreSQL", "USA", "DevOps"]
+for word in capsKeepEN {
+  let typed = AutoSwitchEngine.convert(word, to: .russian)
+  check("caps-keep", AutoSwitchEngine.evaluate(word: typed, currentLayout: .russian) == .keep,
+        "\(word) typed=\(typed) switched")
+}
+for word in ["ПРИВЕТ", "ОК", "СССР", "ВКонтакте", "МГУ", "ЯНДЕКС"] {
+  let typed = AutoSwitchEngine.convert(word, to: .english)
+  check("caps-keep", AutoSwitchEngine.evaluate(word: typed, currentLayout: .english) == .keep,
+        "\(word) typed=\(typed) switched")
+}
+
+// Fallback-tier discriminators: a Title-case word whose lowercase only typo/n-gram would catch.
+var typoCands: [String] = []
+var ngramCands: [String] = []
+for word in enFreq.prefix(5000) where word.count >= 5 {
+  for c in ["x", "j", "q", "z", "v"] {
+    var chars = Array(word)
+    chars[1] = Character(c)
+    let mutated = String(chars)
+    let tier = AutoSwitchEngine.matchTier(word: AutoSwitchEngine.convert(mutated, to: .russian), currentLayout: .russian)
+    if tier == .typo { typoCands.append(mutated) } else if tier == .languageModel { ngramCands.append(mutated) }
+  }
+}
+check("caps-cands", typoCands.count >= 20, "only \(typoCands.count) typo-tier candidates")
+check("caps-cands", ngramCands.count >= 20, "only \(ngramCands.count) n-gram-tier candidates")
+print("  caps-typo candidates: \(typoCands.count), caps-ngram candidates: \(ngramCands.count)")
+for word in typoCands.prefix(25) {
+  let typed = AutoSwitchEngine.convert(titleCase(word), to: .russian)
+  check("caps-typo", AutoSwitchEngine.evaluate(word: typed, currentLayout: .russian) == .keep,
+        "\(titleCase(word)) typed=\(typed) switched")
+}
+for word in ngramCands.prefix(25) {
+  let typed = AutoSwitchEngine.convert(titleCase(word), to: .russian)
+  check("caps-ngram", AutoSwitchEngine.evaluate(word: typed, currentLayout: .russian) == .keep,
+        "\(titleCase(word)) typed=\(typed) switched")
+}
+
+// Negatives: proxy = the lowercase form would hit the exact tier on the typed layout (contract would switch it).
+// Title-case inherits the lowercase exact-tier decision, so pre-existing lowercase exact-tier
+// false switches are pinned as a baseline; any new one fails.
+func capsProxyFalsePositives(_ words: [String], native: Layout) -> [String] {
+  words.filter { AutoSwitchEngine.matchTier(word: $0, currentLayout: native) == .exact }
+}
+
+let n5Baseline: Set<String> = n1PreExisting
+let n5Hits = Set(capsProxyFalsePositives(ruFreq, native: .russian))
+let n5New = n5Hits.subtracting(n5Baseline)
+print("  N5 RU 20k on RU title-case FPs: \(n5Hits.sorted()) new: \(n5New.sorted())")
+check("N5", n5New.isEmpty, "new title-case FPs on RU layout: \(n5New.sorted())")
+
+let n6Baseline: Set<String> = ["rene", "ltd", "neha"]
+let n6Hits = Set(capsProxyFalsePositives(enFreq, native: .english))
+let n6New = n6Hits.subtracting(n6Baseline)
+print("  N6 EN 20k on EN title-case FPs: \(n6Hits.sorted()) new: \(n6New.sorted())")
+check("N6", n6New.isEmpty, "new title-case FPs on EN layout: \(n6New.sorted())")
+
+let properNouns = try! String(contentsOfFile: "\(dataDir)/proper-nouns.lst", encoding: .utf8)
+  .split(whereSeparator: { $0.isNewline })
+  .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+  .filter { !$0.isEmpty }
+check("N7-fixture", properNouns.count >= 200, "only \(properNouns.count) proper nouns")
+var n7FP = 0
+var n7Examples: [String] = []
+for name in properNouns {
+  let native: Layout = isCyrillicWord(name) ? .russian : .english
+  guard native == .english ? name.allSatisfy({ $0 >= "a" && $0 <= "z" }) : true else { continue }
+  if AutoSwitchEngine.matchTier(word: name, currentLayout: native) == .exact {
+    n7FP += 1
+    if n7Examples.count < 8 { n7Examples.append("\(name)(\(native == .russian ? "RU" : "EN"))") }
+  }
+}
+print("  N7 proper-noun false positives: \(n7FP) / \(properNouns.count) examples: \(n7Examples)")
+check("N7", n7FP == 0, "\(n7FP) proper nouns would switch in native layout")
+
 // MARK: - Summary
 
-let labels = ["fixture", "step1", "step3", "step3-neg", "N1", "N2-fixture", "N2", "N3", "N4"]
+let labels = ["fixture", "step1", "step3", "step3-neg", "N1", "N2-fixture", "N2", "N3", "N4",
+              "caps-roundtrip", "caps-fixture", "caps-en", "caps-punct", "caps-I", "caps-ru",
+              "caps-keep", "caps-cands", "caps-typo", "caps-ngram", "N5", "N6", "N7-fixture", "N7"]
 print("=== SUMMARY (failing / cases)")
 var totalFailures = 0
 for label in labels {
