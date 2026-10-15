@@ -192,6 +192,17 @@ for word in ["руки,", "руке,", "рут,", "еще,", "руки.", "ру�
         "RU word with punctuation switched: \(word)")
 }
 
+// A Russian word typed on the English layout and ended with a Russian-layout
+// sentence mark: Shift+7 is "?", Shift+6 ":", Shift+4 ";", "/" is ".".
+for typed in ["cltkfnm&", "ghbdtn&", "ltkf^", "ckjdf$", "ghbdtn/", "cltkfnm&&"] {
+  check("RU-punct", AutoSwitchEngine.evaluate(word: typed, currentLayout: .english) == .switchLayout,
+        "RU word with RU-layout punctuation not switched: \(typed)")
+}
+for typed in ["hello&", "test/", "word$", "and^", "a&", "R&D", "foo&bar"] {
+  check("RU-punct-neg", AutoSwitchEngine.evaluate(word: typed, currentLayout: .english) == .keep,
+        "EN token switched: \(typed)")
+}
+
 let ruEndings: Set<Character> = ["ю", "б", "ж", "э", "х", "ъ"]
 print("N1 pre-existing excluded: \(n1Excluded)")
 var dataWords = Set<String>()
@@ -413,7 +424,8 @@ let labels = ["fixture", "step1", "step3", "step3-neg", "N1", "N2-fixture", "N2"
               "step6-fixture", "step6", "step6-dropped", "step6-core", "step6-common"]
 print("=== SUMMARY (failing / cases)")
 var totalFailures = 0
-for label in labels {
+let extraLabels = caseCount.keys.filter { !labels.contains($0) }.sorted()
+for label in labels + extraLabels {
   let failed = failCount[label, default: 0]
   totalFailures += failed
   print("  \(label): \(failed) / \(caseCount[label, default: 0])")

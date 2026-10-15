@@ -677,7 +677,34 @@ enum AutoSwitchEngine {
         return (String(unshifted) + rest, true)
       }
     }
-    let trimmed = rawWord.trimmingCharacters(in: trimmableCharacters)
-    return (trimmed, isTitleCase(trimmed))
+    let marked = stripRussianLayoutSentenceMarks(rawWord, currentLayout: currentLayout)
+    let trimmed = marked.trimmingCharacters(in: trimmableCharacters)
+    // A run that only reads as Russian once a code symbol is dropped is judged
+    // like a Title-case word: exact tiers only, never typo or language model.
+    return (trimmed, isTitleCase(trimmed) || marked != rawWord)
+  }
+
+  /// Keys that type sentence punctuation on the Russian layout but code symbols
+  /// on the English one: Shift+7 is "?", Shift+6 ":", Shift+4 ";", Shift+2 `"`,
+  /// and "/" is ".". "cltkfnm&" is "сделать?", so up to two such trailing marks
+  /// are dropped before judging an English-layout run, if letters remain.
+  private static let russianLayoutSentenceMarks = CharacterSet(charactersIn: "&^$@/")
+
+  private static func stripRussianLayoutSentenceMarks(
+    _ rawWord: String, currentLayout: Layout
+  ) -> String {
+    guard currentLayout == .english else { return rawWord }
+    var scalars = Array(rawWord.unicodeScalars)
+    var stripped = 0
+    while stripped < 2, let last = scalars.last,
+          russianLayoutSentenceMarks.contains(last) || trimmableCharacters.contains(last) {
+      scalars.removeLast()
+      stripped += 1
+    }
+    let stem = String(String.UnicodeScalarView(scalars))
+    guard stripped > 0, stem.rangeOfCharacter(from: disqualifyingCharacters) == nil else {
+      return rawWord
+    }
+    return stem
   }
 }
