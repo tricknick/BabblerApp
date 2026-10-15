@@ -63,6 +63,7 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var learnedWords: [String] = []
     @AppStorage(userLexiconEnabledKey) private var userLexiconEnabled: Bool = true
+    @AppStorage(missLogEnabledKey) private var missLogEnabled: Bool = true
     @State private var learnedLexiconCount: Int = 0
     @State private var forcedLexiconCount: Int = 0
     @State private var vocabularyExpanded = false
@@ -235,6 +236,23 @@ struct SettingsView: View {
                              ? "Words you undo three times are never corrected again."
                              : learnedWords.joined(separator: ", "))
                             .lineLimit(3)
+                    }
+                    Toggle(isOn: $missLogEnabled) {
+                        Text("Keep a log of missed corrections")
+                        Text("Stored only on this Mac. Helps improve detection.")
+                    }
+                    .toggleStyle(.switch)
+                    LabeledContent {
+                        HStack(spacing: 12) {
+                            Button("Show in Finder") {
+                                NSWorkspace.shared.activateFileViewerSelecting([missLog.fileURL])
+                            }
+                            Button("Clear") {
+                                missLog.clear()
+                            }
+                        }
+                    } label: {
+                        Text("Miss log")
                     }
                 } header: {
                     Text("Vocabularies and exceptions")

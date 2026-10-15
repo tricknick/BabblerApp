@@ -42,6 +42,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     // The layout in use when the last correction fired, so a change back to it
     // can be recognised as a manual revert.
     var layoutBeforeAutoSwitch: Layout?
+    // The tier that fired the last correction, so an undo of it can be logged
+    // with the tier that got it wrong. Stale between corrections is harmless:
+    // only read alongside layoutBeforeAutoSwitch, which is reset the same way.
+    var lastCorrectionTier: AutoSwitchStats.Tier?
     // Layout changes we trigger without a user gesture (app activation restoring a
     // remembered language) must not be read by learning as the user reverting a correction.
     var programmaticLayoutChangeUntil = Date.distantPast
@@ -146,6 +150,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         userLexicon.noteKept(word: word, layout: layout)
     }
 
+    /// `Layout` as the short code `MissLog` entries use.
+    private func missLogLayoutCode(_ layout: Layout) -> String {
+        layout == .english ? "en" : "ru"
+    }
+
     func finishApplicationSetup() {
         if didFinishAppSetup { return }
         didFinishAppSetup = true
@@ -181,7 +190,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             // The user undid our correction, so any forced switch that caused
             // it (two earlier manual swaps) no longer reflects their intent.
             userLexicon.dropForcedSwitch(word: word, layout: layout)
+            missLog.logUndo(
+                typed: word,
+                layout: self.missLogLayoutCode(layout),
+                converted: AutoSwitchEngine.convert(word, to: layout.other),
+                tier: self.lastCorrectionTier?.rawValue,
+                app: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            )
         }
+        // Main-thread reads of isSecurityInput only; checkSecureInput itself
+        // is not thread-safe to call from the write queue.
+        missLog.isSecureInput = { [weak self] in self?.isSecurityInput ?? false }
 
         InputSourceUtils.onKeyboardInputSourceChanged {
             let wasOurs = self.isWaitingForSwitch
@@ -306,10 +325,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
   /// typed in (the current layout, read before the swap). Main thread only.
   private func noteMissedManualSwap(_ typed: String) {
     guard let layout = currentLayout else { return }
+    let bundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
     for piece in typed.split(whereSeparator: { $0.isWhitespace }) {
       let word = AutoSwitchEngine.normalize(String(piece))
       guard !word.isEmpty else { continue }
       userLexicon.noteManualSwap(word: word, layout: layout)
+      missLog.logMiss(
+        typed: String(piece),
+        layout: missLogLayoutCode(layout),
+        converted: AutoSwitchEngine.convert(String(piece), to: layout.other),
+        app: bundleId
+      )
     }
   }
 
@@ -411,10 +437,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         // One correction is counted per auto-switch. A sweep that pulls in earlier
         // words is a phrase correction; otherwise it is the anchor word's tier.
-        autoSwitchStats.recordSwitch(tier: swept.isEmpty ? AutoSwitchStats.Tier(engine: engineTier) : .phrase)
+        let tier = swept.isEmpty ? AutoSwitchStats.Tier(engine: engineTier) : .phrase
+        autoSwitchStats.recordSwitch(tier: tier)
         autoSwitchMemory.noteCorrection(word: normalized)
         typedSinceAutoSwitch = false
         layoutBeforeAutoSwitch = layout
+        lastCorrectionTier = tier
         scheduleAutoSwitchSettle()
         // The word is being rewritten into the other layout, so that is where it ends up.
         sentenceContext.note(word: normalized, finalLayout: layout.other)

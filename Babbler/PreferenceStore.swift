@@ -26,6 +26,7 @@ let autoSwitchRejectionsKey = "autoSwitchRejections"
 let autoSwitchRejectionsMigratedKey = "autoSwitchRejectionsMigrated"
 let enabledThemePacksKey = "enabledThemePacks"
 let userLexiconEnabledKey = "userLexiconEnabled"
+let missLogEnabledKey = "missLogEnabled"
 
 enum MenuBarIconStyle: String, CaseIterable, Identifiable {
     case appIcon, langCode, flag
