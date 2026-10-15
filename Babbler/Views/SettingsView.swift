@@ -64,6 +64,7 @@ struct SettingsView: View {
     @State private var learnedWords: [String] = []
     @AppStorage(userLexiconEnabledKey) private var userLexiconEnabled: Bool = true
     @State private var learnedLexiconCount: Int = 0
+    @State private var vocabularyExpanded = false
     @ObservedObject private var stats = autoSwitchStats
 
     /// Total line plus per-tier breakdown, e.g. "12 corrections · 1 undo · 92% accurate\nDictionary: 8 · ...".
@@ -202,64 +203,53 @@ struct SettingsView: View {
             }
 
             if autoSwitchEnabled {
-                Section {
-                    DisclosureGroup("Vocabularies and exceptions") {
-                        HStack(alignment: .center, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Remember my words")
-                                Text(learnedLexiconCount == 0
-                                     ? "Words you keep twice without correcting are never switched again."
-                                     : "Learned words: \(learnedLexiconCount)")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer()
-                            Toggle("", isOn: $userLexiconEnabled)
-                                .labelsHidden()
-                                .toggleStyle(.switch)
+                Section(isExpanded: $vocabularyExpanded) {
+                    Toggle(isOn: $userLexiconEnabled) {
+                        Text("Remember my words")
+                        Text("Words you keep twice without correcting are never switched again.")
+                    }
+                    .toggleStyle(.switch)
+                    LabeledContent {
+                        Button("Reset") {
+                            userLexicon.reset()
+                            learnedLexiconCount = userLexicon.learnedCount
                         }
-                        HStack(alignment: .center, spacing: 12) {
-                            Text("Forget learned words")
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Button("Reset") {
-                                userLexicon.reset()
-                                learnedLexiconCount = userLexicon.learnedCount
-                            }
-                            .disabled(learnedLexiconCount == 0)
+                        .disabled(learnedLexiconCount == 0)
+                    } label: {
+                        Text("Learned words")
+                        Text(learnedLexiconCount == 0 ? "None yet" : "\(learnedLexiconCount) words")
+                    }
+                    LabeledContent {
+                        Button("Forget") {
+                            autoSwitchMemory.forgetAll()
+                            learnedWords = []
                         }
-                        HStack(alignment: .center, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Learned exceptions")
-                                Text(learnedWords.isEmpty
-                                     ? "Words you undo three times are never corrected again."
-                                     : learnedWords.joined(separator: ", "))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(3)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer()
-                            Button("Forget") {
-                                autoSwitchMemory.forgetAll()
-                                learnedWords = []
-                            }
-                            .disabled(learnedWords.isEmpty)
-                        }
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Specific vocabularies")
-                            Text("Extra words recognised as Russian when typed in the English layout.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                        .disabled(learnedWords.isEmpty)
+                    } label: {
+                        Text("Learned exceptions")
+                        Text(learnedWords.isEmpty
+                             ? "Words you undo three times are never corrected again."
+                             : learnedWords.joined(separator: ", "))
+                            .lineLimit(3)
+                    }
+                } header: {
+                    Text("Vocabularies and exceptions")
+                }
+                if vocabularyExpanded {
+                    Section {
                         Toggle("IT", isOn: themePackBinding("it"))
                         Toggle("Business", isOn: themePackBinding("business"))
                         Toggle("Gaming", isOn: themePackBinding("gaming"))
                         Toggle("Slang", isOn: themePackBinding("slang"))
                         Toggle("Profanity", isOn: themePackBinding("mat"))
+                    } header: {
+                        Text("Specific vocabularies")
+                    } footer: {
+                        Text("Extra words recognised as Russian when typed in the English layout.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
+                    .toggleStyle(.switch)
                 }
             }
 
