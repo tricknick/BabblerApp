@@ -21,6 +21,7 @@ extension AutoSwitchStats {
   enum Tier: String, CaseIterable, Hashable {
     case exact
     case typo
+    case spellChecker
     case ngram
     case phrase
 
@@ -29,6 +30,7 @@ extension AutoSwitchStats {
       switch self {
       case .exact: return "Dictionary"
       case .typo: return "Typo"
+      case .spellChecker: return "Spell checker"
       case .ngram: return "Language model"
       case .phrase: return "Phrase"
       }
@@ -41,6 +43,7 @@ extension AutoSwitchStats.Tier {
     switch engine {
     case .exact: self = .exact
     case .typo: self = .typo
+    case .spellChecker: self = .spellChecker
     case .languageModel: self = .ngram
     }
   }

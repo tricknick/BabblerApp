@@ -164,6 +164,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         reloadThemePacks()
         reloadUserLexicon()
         importLocalSpellingDictionary()
+        // Local system spell-check fallback for words outside our own
+        // dictionaries; no permission beyond what the app already has. Only
+        // the veto half is enabled: measurement showed the confirm half (new
+        // .spellChecker switches) adding false positives that are not worth
+        // its small recall gain. See SpellOracle.swift / docs/DICTIONARY.md.
+        AutoSwitchEngine.spellOracle = SystemSpellOracle()
+        AutoSwitchEngine.spellCheckerConfirmEnabled = false
 
         // A correction the user undid means the word they originally typed was
         // right where it stood — worth learning in its original layout.

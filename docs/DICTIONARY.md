@@ -627,6 +627,52 @@ The holdout leaves out 10% of RU lemmas and 10% of EN words (by hash); the
 test run scores them with models that never saw them. Colloquial and brand test
 lists live in `tests/data/`.
 
+## System spell checker (fallback tier, veto-only)
+
+A dictionary and the n-gram model both still miss recent loanwords, proper
+nouns and brand names no list has caught up with. `Babbler/SpellOracle.swift`
+wraps `NSSpellChecker` (the same local, in-process/XPC service every Cocoa text
+view already uses — no new entitlement or permission) as a `SpellOracle`
+protocol, injected into `AutoSwitchEngine` so tests can substitute a
+deterministic fake. It sits right before the n-gram tier, in two independent
+halves:
+
+- **Veto** (always on once an oracle is wired): if the typed word is already
+  known to the system speller where it stands, the n-gram tier below is
+  suppressed — a word the speller recognises is not the n-gram model's to
+  second-guess.
+- **Confirm** (`AutoSwitchEngine.spellCheckerConfirmEnabled`, gated separately):
+  if the typed word is *not* known to the speller, is >= 4 letters, and its
+  conversion *is* known to the speller in the target language, switch through
+  the new `.spellChecker` tier.
+
+**Measured trade-off** (`BABBLER_SPELL_ORACLE=1` wires the real speller into
+`tests/run.sh`, `en_back_test.sh`, `corpus_probe.sh`, `en_probe.sh`; `=veto`
+wires it with the confirm half disabled):
+
+| Suite | Baseline (off) | Veto only | Confirm + veto |
+| --- | --- | --- | --- |
+| 231,286 out-of-vocabulary EN words, FP | 0 | 0 | 7 (0.0030%: `yelm`, `lysogens`, `multiperforate`, ...) |
+| Colloquial RU recall (115 words) | 104/115 | 104/115 | 107/115 |
+| Brands typed on RU layout (141 words) | 110/141 | 110/141 | 112/141 |
+| Pikabu corpus: correct / FP | 98.3% / 3 | 98.3% / 3 | 98.4% / 3 |
+| Habr corpus: correct / FP | 96.9% / 0 | 96.9% / 0 | 96.9% / 0 |
+
+The 7 confirm-tier false positives are genuine rare English words (`otaria`,
+`nonreimbursement`...) that `NSSpellChecker`'s own English dictionary does not
+know, whose layout-converted Cyrillic gibberish its Russian dictionary
+*does* recognise as a valid inflected form — a structural risk of trusting a
+third-party dictionary as a confirm signal, not a bug in the gating logic. The
+veto half never introduces a new switch, so it cannot cause this kind of
+regression; it measured zero FP change on every suite.
+
+**Shipped behaviour:** `AppDelegate.finishApplicationSetup()` wires the real
+oracle but sets `spellCheckerConfirmEnabled = false`, so the app ships
+veto-only. The confirm half (`.spellChecker` tier) stays fully implemented and
+covered by `tests/SpellTests.swift` / `tests/spell_test.sh` with a fake oracle,
+available behind the flag for future revisiting, but is off by default because
+its measured recall gain did not clear its FP cost.
+
 ## Memory and load time
 
 Loading happens once, on a background queue, on first use. Until it completes

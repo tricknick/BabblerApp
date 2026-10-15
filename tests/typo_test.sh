@@ -42,12 +42,12 @@ PY
 cp "$ROOT_DIR/Babbler/AutoSwitchEngine.swift" "$ROOT_DIR/Babbler/KeyDictionary.swift" \
    "$ROOT_DIR/Babbler/AutoSwitchMemory.swift" "$ROOT_DIR/Babbler/PreferenceStore.swift" \
    "$ROOT_DIR/Babbler/Key.swift" "$ROOT_DIR/Babbler/NGramModel.swift" \
-   "$ROOT_DIR/Babbler/ThemePacks.swift" "$WORK_DIR/"
+   "$ROOT_DIR/Babbler/ThemePacks.swift" "$ROOT_DIR/Babbler/SpellOracle.swift" "$WORK_DIR/"
 
 sources=("$WORK_DIR/LayoutDictionary.swift" "$WORK_DIR/AutoSwitchEngine.swift" \
          "$WORK_DIR/KeyDictionary.swift" "$WORK_DIR/AutoSwitchMemory.swift" \
          "$WORK_DIR/PreferenceStore.swift" "$WORK_DIR/Key.swift" "$WORK_DIR/NGramModel.swift" \
-         "$WORK_DIR/ThemePacks.swift")
+         "$WORK_DIR/ThemePacks.swift" "$WORK_DIR/SpellOracle.swift")
 cp "$ROOT_DIR/tests/TypoTests.swift" "$WORK_DIR/main.swift"
 
 if ! swiftc -O -o "$WORK_DIR/typo-tests" "$WORK_DIR/main.swift" "${sources[@]}"; then

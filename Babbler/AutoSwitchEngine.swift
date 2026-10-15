@@ -70,6 +70,10 @@ enum AutoSwitchEngine {
     case exact
     /// The conversion is a word with one keystroke missing.
     case typo
+    /// Neither form is in our own lists, but the local system spell-checker
+    /// (NSSpellChecker) knows the conversion in the target language and does not
+    /// know the typed form where it stands. See SpellOracle.swift.
+    case spellChecker
     /// Neither form is a word anywhere, but the conversion reads like the other
     /// language and the typed form does not read like this one.
     case languageModel
@@ -201,9 +205,21 @@ enum AutoSwitchEngine {
       return .typo
     }
 
+    // The local system spell-checker (NSSpellChecker) covers proper nouns, recent
+    // loanwords and brand names our own lists have not caught up with. It is only
+    // ever consulted this late, after every dictionary and typo tier has already
+    // found nothing. `typedKnownToSpeller` doubles as a veto on the n-gram tier
+    // below: a word the system speller already recognises where it stands is not
+    // the n-gram model's to second-guess. See SpellOracle.swift.
+    let typedKnownToSpeller = isKnownToSpeller(word, in: currentLayout)
+    if spellCheckerConfirmEnabled, !typedKnownToSpeller, word.count >= 4,
+       isKnownToSpeller(converted, in: currentLayout.other) {
+      return .spellChecker
+    }
+
     // Colloquial, derived and invented words are in no list. Fall back to asking
     // which language the letters look like.
-    if let score = languageModelScore(
+    if !typedKnownToSpeller, let score = languageModelScore(
       typed: word, converted: converted, currentLayout: currentLayout, dictionary: dictionary
     ), languageModelScorePasses(score, context: context, currentLayout: currentLayout) {
       return .languageModel
@@ -335,6 +351,33 @@ enum AutoSwitchEngine {
   private static func isThemePackHit(_ converted: String, target: Layout) -> Bool {
     guard target == .russian, let contains = themePackContains else { return false }
     return contains(converted)
+  }
+
+  /// Whether a word is known to the local system spell-check service in a given
+  /// layout. Set through `AutoSwitchEngine.spellOracle` (SpellOracle.swift); nil
+  /// means no oracle, which keeps this file — and the dictionary test harnesses
+  /// that compile it standalone — buildable without that one, same reasoning as
+  /// `themePackContains` above.
+  static var spellOracleIsKnown: ((String, Layout) -> Bool)?
+
+  /// Whether a known-converted, unknown-typed word may switch through the
+  /// `.spellChecker` tier (the "confirm" half; see `matchTier` above). The veto
+  /// half — holding back the n-gram tier for a word the speller already
+  /// recognises in its own layout — always applies once an oracle is set and
+  /// does not depend on this flag.
+  ///
+  /// Defaults to true (so tests using a fake oracle exercise the confirm tier
+  /// by default); production wiring in AppDelegate.finishApplicationSetup sets
+  /// it false. Measured on tests/run.sh's 231k-word out-of-vocabulary English
+  /// suite: confirming added 7 new misfires (rare real words whose
+  /// layout-converted gibberish NSSpellChecker's Russian dictionary happened to
+  /// recognise) for a recall gain of only 3-5 words on the colloquial/brand
+  /// lists — not a trade worth making. The veto alone added zero misfires on
+  /// every suite measured. See docs/DICTIONARY.md.
+  static var spellCheckerConfirmEnabled = true
+
+  private static func isKnownToSpeller(_ word: String, in layout: Layout) -> Bool {
+    spellOracleIsKnown?(word, layout) ?? false
   }
 
   /// Membership test for the user's learned lexicon in a given layout. Set

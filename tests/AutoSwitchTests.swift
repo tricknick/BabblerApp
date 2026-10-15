@@ -49,6 +49,18 @@ let shippedRussianModel = NGramModel(contentsOf: URL(fileURLWithPath: "\(resourc
 let modelLoadMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - modelLoadStart.uptimeNanoseconds) / 1e6
 LayoutDictionary.shared.setNGramModels(english: shippedEnglishModel, russian: shippedRussianModel)
 
+// BABBLER_SPELL_ORACLE=1 (full: confirm+veto) or =veto (veto only) wires the
+// real NSSpellChecker-backed oracle so this suite's false-positive budgets can
+// be measured with it live, same as without it; default runs (this is one of
+// the "must pass" suites) leave it unwired so the existing budgets are
+// unaffected by whichever dictionaries happen to be installed on the machine
+// running the tests. See tests/spell_test.sh for the tier's own deterministic
+// unit tests, and docs/DICTIONARY.md for the measured full-vs-veto numbers.
+if let spellOracleMode = ProcessInfo.processInfo.environment["BABBLER_SPELL_ORACLE"] {
+  AutoSwitchEngine.spellOracle = SystemSpellOracle()
+  if spellOracleMode == "veto" { AutoSwitchEngine.spellCheckerConfirmEnabled = false }
+}
+
 var failures = 0
 func check(_ passed: Bool, _ message: String) {
   if !passed {
@@ -393,12 +405,14 @@ if let raw = try? String(contentsOfFile: rawEnglishPath, encoding: .utf8) {
   var total = 0
   var misfires: [String] = []
   var modelMisfires: [String] = []
+  var spellMisfires: [String] = []
   raw.enumerateLines { line, _ in
     let word = line.trimmingCharacters(in: .whitespaces).lowercased()
     guard word.count >= 3, !known.contains(word) else { return }
     total += 1
     switch AutoSwitchEngine.matchTier(word: word, currentLayout: .english) {
     case .exact, .typo: misfires.append(word)
+    case .spellChecker: spellMisfires.append(word)
     case .languageModel: modelMisfires.append(word)
     case nil: break
     }
@@ -411,6 +425,10 @@ if let raw = try? String(contentsOfFile: rawEnglishPath, encoding: .utf8) {
   print(String(format: "  language-model tier: %d/%d = %.4f%%  e.g. %@", modelMisfires.count, total, modelRate,
                modelMisfires.prefix(8).joined(separator: " ")))
   check(modelRate <= 0.05, "language-model misfire rate \(modelRate)% on out-of-vocabulary English exceeds budget")
+  let spellRate = total == 0 ? 0 : Double(spellMisfires.count) * 100 / Double(total)
+  print(String(format: "  spell-checker tier: %d/%d = %.4f%%  e.g. %@", spellMisfires.count, total, spellRate,
+               spellMisfires.prefix(8).joined(separator: " ")))
+  check(spellRate <= 0.05, "spell-checker misfire rate \(spellRate)% on out-of-vocabulary English exceeds budget")
 } else {
   print("  WARNING: \(rawEnglishPath) is missing; skipped. Run scripts/build_dictionaries.sh.")
 }
@@ -666,18 +684,20 @@ for (word, meaning) in [("жопецкий", "derived from жопа"), ("биз�
 print("=== language model: colloquial Russian typed on the English layout")
 var colloquialMissed: [String] = []
 var colloquialByModel = 0
+var colloquialBySpellChecker = 0
 for word in colloquialWords {
   let typed = AutoSwitchEngine.convert(word, to: .english)
   switch AutoSwitchEngine.matchTier(word: typed, currentLayout: .english) {
   case .languageModel: colloquialByModel += 1
+  case .spellChecker: colloquialBySpellChecker += 1
   case .exact, .typo: break
   case nil: colloquialMissed.append(word)
   }
 }
 let colloquialRecall = percent(colloquialWords.count - colloquialMissed.count, colloquialWords.count)
-print(String(format: "  recall %d/%d = %.1f%% (%d through the model); missed: %@",
+print(String(format: "  recall %d/%d = %.1f%% (%d through the model, %d through the spell checker); missed: %@",
              colloquialWords.count - colloquialMissed.count, colloquialWords.count, colloquialRecall,
-             colloquialByModel, colloquialMissed.joined(separator: " ")))
+             colloquialByModel, colloquialBySpellChecker, colloquialMissed.joined(separator: " ")))
 check(colloquialRecall >= 85, "colloquial recall \(colloquialRecall)% is below 85%")
 
 print("=== language model: colloquial Russian typed correctly stays put")

@@ -88,6 +88,13 @@ LayoutDictionary.shared.setNGramModels(
   russian: NGramModel(contentsOf: URL(fileURLWithPath: "\(resources)/ngram-ru.bin")))
 AutoSwitchEngine.themePacks = ThemePacks.load(
   ids: Set(ThemePacks.allIds), resourceDir: URL(fileURLWithPath: resources))
+// BABBLER_SPELL_ORACLE=1 (full) or =veto wires the real NSSpellChecker-backed
+// oracle so this suite's FP floors can be measured with it live; default runs
+// leave it unwired since this is one of the "must pass" suites.
+if let spellOracleMode = ProcessInfo.processInfo.environment["BABBLER_SPELL_ORACLE"] {
+  AutoSwitchEngine.spellOracle = SystemSpellOracle()
+  if spellOracleMode == "veto" { AutoSwitchEngine.spellCheckerConfirmEnabled = false }
+}
 
 var failCount: [String: Int] = [:]
 var caseCount: [String: Int] = [:]

@@ -71,6 +71,13 @@ LayoutDictionary.shared.setNGramModels(
   russian: NGramModel(contentsOf: URL(fileURLWithPath: "\(resources)/ngram-ru.bin")))
 AutoSwitchEngine.themePacks = ThemePacks.load(
   ids: Set(ThemePacks.allIds), resourceDir: URL(fileURLWithPath: resources))
+// BABBLER_SPELL_ORACLE=1 (full) or =veto wires the real NSSpellChecker-backed
+// oracle so the measurement section below can report real tier attribution;
+// default runs (this is one of the "must pass" suites) leave it unwired.
+if let spellOracleMode = ProcessInfo.processInfo.environment["BABBLER_SPELL_ORACLE"] {
+  AutoSwitchEngine.spellOracle = SystemSpellOracle()
+  if spellOracleMode == "veto" { AutoSwitchEngine.spellCheckerConfirmEnabled = false }
+}
 
 // MARK: - Word lists
 
@@ -239,8 +246,9 @@ struct TierTally {
   var total = 0
   var exact = 0
   var typo = 0
+  var spellChecker = 0
   var languageModel = 0
-  var switched: Int { exact + typo + languageModel }
+  var switched: Int { exact + typo + spellChecker + languageModel }
 }
 
 func measureTiers(words: [String], intended: Layout, _ cls: TypoClass, minLength: Int) -> TierTally {
@@ -252,6 +260,7 @@ func measureTiers(words: [String], intended: Layout, _ cls: TypoClass, minLength
       switch AutoSwitchEngine.matchTier(word: typed, currentLayout: intended.other) {
       case .exact?: t.exact += 1
       case .typo?: t.typo += 1
+      case .spellChecker?: t.spellChecker += 1
       case .languageModel?: t.languageModel += 1
       case nil: break
       }
@@ -325,7 +334,7 @@ for set in measureSets {
       let pct = t.total == 0 ? "n/a" : String(format: "%.1f%%", 100.0 * Double(t.switched) / Double(t.total))
       let typoPct = t.total == 0 ? "n/a" : String(format: "%.1f%%", 100.0 * Double(t.typo) / Double(t.total))
       print("   \(cls.rawValue.padding(toLength: 14, withPad: " ", startingAt: 0)) switched \(t.switched)/\(t.total) (\(pct))"
-        + "  exact=\(t.exact) typoTier=\(t.typo) (\(typoPct)) lm=\(t.languageModel)")
+        + "  exact=\(t.exact) typoTier=\(t.typo) (\(typoPct)) spell=\(t.spellChecker) lm=\(t.languageModel)")
     }
   }
 }

@@ -37,6 +37,7 @@
 	BB200000065F00000100AA01 /* ngram-en.bin in Resources */ = {isa = PBXBuildFile; fileRef = BB100000065F00000100AA01 /* ngram-en.bin */; };
 		BB2000000523F00001AA01 /* AutoSwitchMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000523F00001AA01 /* AutoSwitchMemory.swift */; };
 		BB2000000A0F00000100AA01 /* ThemePacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000A0F00000100AA01 /* ThemePacks.swift */; };
+		BB2000001000000100AA01 /* SpellOracle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000001000000100AA01 /* SpellOracle.swift */; };
 		BB2000000A1F00000100AA01 /* UserLexicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000A1F00000100AA01 /* UserLexicon.swift */; };
 		BB2000000A2F00000100AA01 /* AutoSwitchStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000A2F00000100AA01 /* AutoSwitchStats.swift */; };
 		BB2000000A3F00000100AA01 /* SentenceContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000A3F00000100AA01 /* SentenceContext.swift */; };
@@ -90,6 +91,7 @@
 	BB100000065F00000100AA01 /* ngram-en.bin */ = {isa = PBXFileReference; lastKnownFileType = file; name = "ngram-en.bin"; path = "Resources/ngram-en.bin"; sourceTree = "<group>"; };
 		BB1000000523F00001AA01 /* AutoSwitchMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSwitchMemory.swift; sourceTree = "<group>"; };
 		BB1000000A0F00000100AA01 /* ThemePacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePacks.swift; sourceTree = "<group>"; };
+		BB1000001000000100AA01 /* SpellOracle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpellOracle.swift; sourceTree = "<group>"; };
 		BB1000000A1F00000100AA01 /* UserLexicon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserLexicon.swift; sourceTree = "<group>"; };
 		BB1000000A2F00000100AA01 /* AutoSwitchStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSwitchStats.swift; sourceTree = "<group>"; };
 		BB1000000A3F00000100AA01 /* SentenceContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceContext.swift; sourceTree = "<group>"; };
@@ -193,6 +195,7 @@
 				BB100000052F00000100AA01 /* ru-typo.bin */,
 				BB100000063F00000100AA01 /* NGramModel.swift */,
 				BB1000000A0F00000100AA01 /* ThemePacks.swift */,
+				BB1000001000000100AA01 /* SpellOracle.swift */,
 				BB1000000A1F00000100AA01 /* UserLexicon.swift */,
 				BB1000000A2F00000100AA01 /* AutoSwitchStats.swift */,
 				BB1000000A3F00000100AA01 /* SentenceContext.swift */,
@@ -318,6 +321,7 @@
 				BB200000022F00000100AA01 /* AutoSwitchEngine.swift in Sources */,
 				BB200000063F00000100AA01 /* NGramModel.swift in Sources */,
 				BB2000000A0F00000100AA01 /* ThemePacks.swift in Sources */,
+				BB2000001000000100AA01 /* SpellOracle.swift in Sources */,
 				BB2000000A1F00000100AA01 /* UserLexicon.swift in Sources */,
 				BB2000000A2F00000100AA01 /* AutoSwitchStats.swift in Sources */,
 				BB2000000A3F00000100AA01 /* SentenceContext.swift in Sources */,

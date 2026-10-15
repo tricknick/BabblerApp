@@ -89,8 +89,9 @@ func recordSwitches(_ stats: AutoSwitchStats, _ tier: AutoSwitchStats.Tier, _ n:
 print("=== tier mapping from engine tiers")
 check(AutoSwitchStats.Tier(engine: .exact) == .exact, "engine .exact must map to .exact")
 check(AutoSwitchStats.Tier(engine: .typo) == .typo, "engine .typo must map to .typo")
+check(AutoSwitchStats.Tier(engine: .spellChecker) == .spellChecker, "engine .spellChecker must map to .spellChecker")
 check(AutoSwitchStats.Tier(engine: .languageModel) == .ngram, "engine .languageModel must map to .ngram")
-check(AutoSwitchStats.Tier.allCases.count == 4, "Tier must have exactly 4 cases")
+check(AutoSwitchStats.Tier.allCases.count == 5, "Tier must have exactly 5 cases")
 
 // MARK: - Counting and precision
 

@@ -45,6 +45,14 @@ LayoutDictionary.shared.setNGramModels(
   russian: NGramModel(contentsOf: URL(fileURLWithPath: "\(resources)/ngram-ru.bin")))
 AutoSwitchEngine.themePacks = ThemePacks.load(
   ids: Set(ThemePacks.allIds), resourceDir: URL(fileURLWithPath: resources))
+// BABBLER_SPELL_ORACLE=1 (full) or =veto wires the real NSSpellChecker-backed
+// oracle, to compare recall/FP against the baseline without it. Off by
+// default so a bare `./tests/en_probe.sh` reproduces the pre-existing,
+// "must pass" numbers.
+if let spellOracleMode = env["BABBLER_SPELL_ORACLE"] {
+  AutoSwitchEngine.spellOracle = SystemSpellOracle()
+  if spellOracleMode == "veto" { AutoSwitchEngine.spellCheckerConfirmEnabled = false }
+}
 
 enum Outcome { case correct, wrong, kept }
 
