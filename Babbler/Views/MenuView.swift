@@ -88,12 +88,12 @@ struct MenuView: View {
             .padding(.bottom, 6)
 
             if stats.today.switches > 0 {
-                Text("Сегодня: \(stats.today.summaryLine)")
+                Text("Today: \(stats.today.summaryLine)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 14)
                     .padding(.bottom, 6)
-                    .help("Всего: \(stats.total.summaryLine)")
+                    .help("Total: \(stats.total.summaryLine)")
             }
 
             if !appDelegate.hasAccessibility {

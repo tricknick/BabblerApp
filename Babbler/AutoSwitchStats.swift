@@ -24,13 +24,13 @@ extension AutoSwitchStats {
     case ngram
     case phrase
 
-    /// Short Russian label for the settings breakdown.
+    /// Short label for the settings breakdown.
     var title: String {
       switch self {
-      case .exact: return "по словарю"
-      case .typo: return "опечатка"
-      case .ngram: return "по частотам"
-      case .phrase: return "фраза"
+      case .exact: return "Dictionary"
+      case .typo: return "Typo"
+      case .ngram: return "Language model"
+      case .phrase: return "Phrase"
       }
     }
   }
@@ -68,27 +68,19 @@ struct StatsSnapshot {
 }
 
 extension StatsSnapshot {
-  /// Compact Russian summary, e.g. "12 исправлений · 1 отмена · точность 92%".
+  /// Compact summary, e.g. "12 corrections · 1 undo · 92% accurate".
   var summaryLine: String {
     var parts = [
-      "\(switches) \(russianPlural(switches, "исправление", "исправления", "исправлений"))",
-      "\(undos) \(russianPlural(undos, "отмена", "отмены", "отмен"))",
+      "\(switches) \(switches == 1 ? "correction" : "corrections")",
+      "\(undos) \(undos == 1 ? "undo" : "undos")",
     ]
     if let precision = precision {
-      parts.append("точность \(Int((min(max(precision, 0), 1) * 100).rounded()))%")
+      parts.append("\(Int((min(max(precision, 0), 1) * 100).rounded()))% accurate")
     }
     return parts.joined(separator: " · ")
   }
 }
 
-private func russianPlural(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {
-  if (11...14).contains(n % 100) { return many }
-  switch n % 10 {
-  case 1: return one
-  case 2...4: return few
-  default: return many
-  }
-}
 
 /// Local counters for auto-switch activity: switches, undos, manual swaps.
 /// Kept in the store, never sent anywhere. Today's counts roll over at local midnight.
