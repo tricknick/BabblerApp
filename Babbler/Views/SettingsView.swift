@@ -68,18 +68,6 @@ struct SettingsView: View {
     @State private var vocabularyExpanded = false
     @ObservedObject private var stats = autoSwitchStats
 
-    /// Total line plus per-tier breakdown, e.g. "12 corrections · 1 undo · 92% accurate\nDictionary: 8 · ...".
-    private var statsSettingsText: String {
-        let total = stats.total
-        guard total.switches > 0 else {
-            return "No automatic corrections yet. Statistics are stored only on this Mac."
-        }
-        let breakdown = AutoSwitchStats.Tier.allCases
-            .map { "\($0.title): \(total.switchesByTier[$0] ?? 0)" }
-            .joined(separator: " · ")
-        return "\(total.summaryLine)\n\(breakdown)"
-    }
-
     @State private var enabledThemePacks: Set<String> = Set(ThemePacks.allIds)
 
     private func themePackBinding(_ id: String) -> Binding<Bool> {
@@ -185,21 +173,26 @@ struct SettingsView: View {
                         .labelsHidden()
                         .toggleStyle(.switch)
                 }
-                if autoSwitchEnabled {
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Statistics")
-                            Text(statsSettingsText)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+            }
+
+            if autoSwitchEnabled {
+                Section {
+                    StatsOverview(snapshot: stats.total)
+                } header: {
+                    HStack {
+                        Text("Statistics")
                         Spacer()
                         Button("Reset") {
                             autoSwitchStats.reset()
                         }
+                        .buttonStyle(.link)
+                        .font(.subheadline)
                         .disabled(stats.total.switches == 0 && stats.total.undos == 0 && stats.total.manualSwaps == 0)
                     }
+                } footer: {
+                    Text("Stored only on this Mac.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -211,16 +204,24 @@ struct SettingsView: View {
                     }
                     .toggleStyle(.switch)
                     LabeledContent {
-                        Button("Reset") {
-                            userLexicon.reset()
-                            learnedLexiconCount = userLexicon.learnedCount
-                            forcedLexiconCount = userLexicon.forcedCount
+                        HStack(spacing: 12) {
+                            CountValue(value: learnedLexiconCount)
+                            Button("Reset") {
+                                userLexicon.reset()
+                                learnedLexiconCount = userLexicon.learnedCount
+                                forcedLexiconCount = userLexicon.forcedCount
+                            }
+                            .disabled(learnedLexiconCount == 0 && forcedLexiconCount == 0)
                         }
-                        .disabled(learnedLexiconCount == 0 && forcedLexiconCount == 0)
                     } label: {
-                        Text("Learned words")
-                        Text(learnedLexiconCount == 0 ? "None yet" : "\(learnedLexiconCount) words")
-                        Text(forcedLexiconCount == 0 ? "auto-switch: none" : "auto-switch: \(forcedLexiconCount)")
+                        Text("Words kept as typed")
+                        Text("Never switched after you keep them twice.")
+                    }
+                    LabeledContent {
+                        CountValue(value: forcedLexiconCount)
+                    } label: {
+                        Text("Words always switched")
+                        Text("Switched automatically after you swap them by hand twice.")
                     }
                     LabeledContent {
                         Button("Forget") {
@@ -455,6 +456,118 @@ struct AppInputSourceRow: View {
             if let source = InputSourceUtils.inputSources?.first(where: { $0.id == newValue }) {
                 preferenceStore.setInputSource(app.id, newValue, source.name)
             }
+        }
+    }
+}
+
+/// Trailing count in a settings row, in the primary colour like System Settings values.
+private struct CountValue: View {
+    let value: Int
+
+    var body: some View {
+        Text(value, format: .number)
+            .monospacedDigit()
+            .foregroundStyle(value == 0 ? .secondary : .primary)
+    }
+}
+
+/// Auto-switch totals as large figures with a per-tier bar, in the style of Screen Time.
+private struct StatsOverview: View {
+    let snapshot: StatsSnapshot
+
+    private var accuracyText: String {
+        guard let precision = snapshot.precision else { return "—" }
+        return "\(Int((min(max(precision, 0), 1) * 100).rounded()))%"
+    }
+
+    private var accuracyColor: Color {
+        guard let precision = snapshot.precision else { return .secondary }
+        return precision >= 0.9 ? .green : precision >= 0.75 ? .orange : .red
+    }
+
+    private var tiers: [(tier: AutoSwitchStats.Tier, count: Int)] {
+        AutoSwitchStats.Tier.allCases
+            .map { ($0, snapshot.switchesByTier[$0] ?? 0) }
+            .filter { $0.count > 0 }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                figure(Text(snapshot.switches, format: .number), "Corrections", .primary)
+                figure(Text(snapshot.undos, format: .number), "Undone", .primary)
+                figure(Text(snapshot.manualSwaps, format: .number), "Fixed by hand", .primary)
+                figure(Text(accuracyText), "Accuracy", accuracyColor)
+            }
+            if snapshot.switches > 0 {
+                tierBar
+                tierLegend
+            } else {
+                Text("No automatic corrections yet.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func figure(_ value: Text, _ caption: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            value
+                .font(.system(.title2, design: .rounded).weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(color)
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var tierBar: some View {
+        GeometryReader { geometry in
+            let total = max(tiers.reduce(0) { $0 + $1.count }, 1)
+            let spacing: CGFloat = 2
+            let width = geometry.size.width - spacing * CGFloat(max(tiers.count - 1, 0))
+            HStack(spacing: spacing) {
+                ForEach(tiers, id: \.tier) { item in
+                    Rectangle()
+                        .fill(Self.color(for: item.tier))
+                        .frame(width: max(width * CGFloat(item.count) / CGFloat(total), 3))
+                }
+            }
+        }
+        .frame(height: 8)
+        .clipShape(Capsule())
+        .accessibilityHidden(true)
+    }
+
+    private var tierLegend: some View {
+        HStack(spacing: 14) {
+            ForEach(tiers, id: \.tier) { item in
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(Self.color(for: item.tier))
+                        .frame(width: 7, height: 7)
+                    Text(item.tier.title)
+                        .foregroundStyle(.secondary)
+                    Text(item.count, format: .number)
+                        .monospacedDigit()
+                }
+                .font(.caption)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private static func color(for tier: AutoSwitchStats.Tier) -> Color {
+        switch tier {
+        case .exact: return .blue
+        case .typo: return .orange
+        case .spellChecker: return .purple
+        case .ngram: return .teal
+        case .phrase: return .green
         }
     }
 }
