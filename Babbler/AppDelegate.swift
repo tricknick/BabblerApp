@@ -60,6 +60,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     var autoSwitchWord: [RecordedKey] = []
     var autoSwitchText: String = ""
     var autoSwitchTail: [TypedWord] = []
+    /// False from an auto-switch until the next keystroke, click or delete:
+    /// only an action key pressed in that gap undoes the correction.
+    var typedSinceAutoSwitch = true
     let autoSwitchMaxPhraseWords = 4
     let autoSwitchMaxPhraseKeys = 28
 
@@ -388,6 +391,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // words is a phrase correction; otherwise it is the anchor word's tier.
         autoSwitchStats.recordSwitch(tier: swept.isEmpty ? AutoSwitchStats.Tier(engine: engineTier) : .phrase)
         autoSwitchMemory.noteCorrection(word: normalized)
+        typedSinceAutoSwitch = false
         layoutBeforeAutoSwitch = layout
         scheduleAutoSwitchSettle()
         // The word is being rewritten into the other layout, so that is where it ends up.
@@ -435,6 +439,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         autoSwitchWord = []
         autoSwitchText = ""
         autoSwitchTail = []
+        typedSinceAutoSwitch = true
     }
 
     /// The app changed, so any open correction belongs to another context. The
@@ -519,8 +524,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         case .action, .lineAction:
             // Text replacement is optional. Every action switches the input language,
             // including when no text has been typed or selected.
-            noteManualActionForUndo()
-            autoSwitchStats.recordManualSwap()
+            if AutoSwitchStats.isUndoOfCorrection(typedSinceCorrection: typedSinceAutoSwitch) {
+                noteManualActionForUndo()
+            } else {
+                // Not an undo of our last correction: the user is fixing other text.
+                autoSwitchMemory.noteContextChanged()
+            }
+            let autoSwitchActive = preferenceStore.getAutoSwitchEnabled()
+                && preferenceStore.getIsTextReplaceEnabled()
+                && isAutoSwitchAllowedInCurrentApp()
+            if AutoSwitchStats.isMissedAutoSwitch(
+                autoSwitchActive: autoSwitchActive,
+                wordInProgress: !autoSwitchWord.isEmpty,
+                keptWordPending: !autoSwitchTail.isEmpty
+            ) {
+                autoSwitchStats.recordManualSwap()
+            }
             resetAutoSwitchBuffers()
             forgetManuallySwapped(actionResult == .lineAction ? lineText : text)
             beginSwitch(actionResult == .lineAction ? lineRecord : wordRecord)
@@ -609,6 +628,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         if !endsWord {
             autoSwitchWord.append(entry)
             autoSwitchText += event.characters ?? ""
+            typedSinceAutoSwitch = true
         }
     }
 

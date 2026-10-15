@@ -118,6 +118,21 @@ final class AutoSwitchStats: ObservableObject {
     record([AutoSwitchStats.manualSwapsKey])
   }
 
+  /// A manual swap counts as a missed auto-switch only when auto-switch had its
+  /// chance: it is active here, the word was finished with a space or Enter, and
+  /// auto-switch looked at it and kept it. Pressing the action key mid-word, on
+  /// an empty buffer, or right after our own correction (an undo) is not a miss.
+  static func isMissedAutoSwitch(autoSwitchActive: Bool, wordInProgress: Bool, keptWordPending: Bool) -> Bool {
+    autoSwitchActive && !wordInProgress && keptWordPending
+  }
+
+  /// The action key undoes our last correction only when it is pressed before
+  /// anything else was typed, clicked or deleted. Pressed later — say, to fix
+  /// the next word mid-way — it is a manual swap of that word, not an undo.
+  static func isUndoOfCorrection(typedSinceCorrection: Bool) -> Bool {
+    !typedSinceCorrection
+  }
+
   func reset() {
     store.setAutoSwitchStatsTotal([:])
     store.setAutoSwitchStatsToday([:])

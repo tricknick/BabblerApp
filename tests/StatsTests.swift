@@ -228,6 +228,21 @@ check(statsX.total.switches == 1 && statsX.today.switches == 1, "recording after
 
 // MARK: - Summary
 
+// A manual swap is a missed auto-switch only when auto-switch had its chance:
+// it is active, the word was finished (space/Enter) and auto-switch kept it.
+check(AutoSwitchStats.isMissedAutoSwitch(autoSwitchActive: true, wordInProgress: false, keptWordPending: true),
+      "finished kept word swapped by hand is a miss")
+check(!AutoSwitchStats.isMissedAutoSwitch(autoSwitchActive: true, wordInProgress: true, keptWordPending: true),
+      "swap before the word was finished is not a miss")
+check(!AutoSwitchStats.isMissedAutoSwitch(autoSwitchActive: true, wordInProgress: false, keptWordPending: false),
+      "swap with no kept word (nothing typed, or undo of a correction) is not a miss")
+check(!AutoSwitchStats.isMissedAutoSwitch(autoSwitchActive: false, wordInProgress: false, keptWordPending: true),
+      "swap while auto-switch is off or excluded in the app is not a miss")
+
+// The action key undoes a correction only when nothing was typed after it.
+check(AutoSwitchStats.isUndoOfCorrection(typedSinceCorrection: false), "Alt straight after a correction is an undo")
+check(!AutoSwitchStats.isUndoOfCorrection(typedSinceCorrection: true), "Alt after typing more is not an undo")
+
 if failures == 0 {
   print("ALL STATS CHECKS PASS")
 } else {
