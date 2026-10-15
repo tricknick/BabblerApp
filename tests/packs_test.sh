@@ -42,7 +42,14 @@ import sys
 path = sys.argv[1]
 source = open(path).read()
 hook = """  func setForTests(_ en: Set<String>, _ ru: HashedWordSet, typo: HashedWordSet) {
-    lock.lock(); english = en; russian = ru; russianTypo = typo; isLoaded = true; lock.unlock()
+    lock.lock(); english = en; russian = ru; russianTypo = typo; isLoaded = true
+    commonEnglish = Self.testLoadWords("common-en"); commonRussian = Self.testLoadWords("common-ru"); lock.unlock()
+  }
+  static func testLoadWords(_ name: String) -> Set<String> {
+    guard let dir = ProcessInfo.processInfo.environment["BABBLER_RESOURCES"],
+          let data = try? Data(contentsOf: URL(fileURLWithPath: dir).appendingPathComponent(name + ".txt.gz")),
+          let text = testGunzipImpl(data) else { return [] }
+    return Set(text.split(whereSeparator: { $0.isNewline }).map(String.init))
   }
   static func testGunzip(_ data: Data) -> String? { testGunzipImpl(data) }
 

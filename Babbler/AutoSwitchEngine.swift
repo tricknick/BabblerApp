@@ -179,6 +179,9 @@ enum AutoSwitchEngine {
     if dictionary.hasWordOneInsertionAway(converted, in: currentLayout.other) {
       return .typo
     }
+    if dictionary.hasCommonWordOneTypoAway(converted, in: currentLayout.other) {
+      return .typo
+    }
 
     // Colloquial, derived and invented words are in no list. Fall back to asking
     // which language the letters look like.

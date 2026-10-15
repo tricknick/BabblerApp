@@ -1,7 +1,7 @@
 #!/bin/zsh
 #
-# Rebuilds Babbler/Resources/{en.txt.gz,ru-forms.bin,ru-typo.bin,ngram-ru.bin,ngram-en.bin}
-# from public word lists.
+# Rebuilds Babbler/Resources/{en.txt.gz,ru-forms.bin,ru-typo.bin,ngram-ru.bin,ngram-en.bin,
+# common-ru.txt.gz,common-en.txt.gz} from public word lists.
 #
 # English is the intersection of a spellcheck word list with an OpenSubtitles
 # frequency list, cut to a size that keeps the app's memory footprint
@@ -196,6 +196,10 @@ echo "==> Training the character n-gram models..."
 "$VENV/bin/python" "$ROOT_DIR/scripts/build_ngram_models.py" --cache "$CACHE_DIR" --output "$OUT_DIR"
 "$VENV/bin/python" "$ROOT_DIR/scripts/build_ngram_models.py" --cache "$CACHE_DIR" \
   --holdout 0.1 --output "$CACHE_DIR/ngram-holdout"
+
+# The top 5000 words per language, used by the one-typo tiers in LayoutDictionary.
+echo "==> Writing the common-word lists..."
+python3 "$ROOT_DIR/scripts/build_common_words.py" --cache "$CACHE_DIR" --out "$OUT_DIR" --top 5000
 
 rm -f "$OUT_DIR/ru.txt.gz"
 echo "==> Done. Rebuild the app to pick them up: ./scripts/install.sh"

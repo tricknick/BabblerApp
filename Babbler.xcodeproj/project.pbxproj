@@ -42,6 +42,8 @@
 		BB2000000A3F00000100AA01 /* SentenceContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000A3F00000100AA01 /* SentenceContext.swift */; };
 		BB2000000A4F00000100AA01 /* AutoSwitchAppProfiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000000A4F00000100AA01 /* AutoSwitchAppProfiles.swift */; };
 		BB2000000B0F00000100AA01 /* pack-it.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000B0F00000100AA01 /* pack-it.txt.gz */; };
+		BB2000000C1A00000100AA01 /* common-ru.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000C1A00000100AA01 /* common-ru.txt.gz */; };
+		BB2000000C1B00000100AA01 /* common-en.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000C1B00000100AA01 /* common-en.txt.gz */; };
 		BB2000000C0F00000100AA01 /* pack-business.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000C0F00000100AA01 /* pack-business.txt.gz */; };
 		BB2000000D0F00000100AA01 /* pack-gaming.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000D0F00000100AA01 /* pack-gaming.txt.gz */; };
 		BB2000000E0F00000100AA01 /* pack-slang.txt.gz in Resources */ = {isa = PBXBuildFile; fileRef = BB1000000E0F00000100AA01 /* pack-slang.txt.gz */; };
@@ -93,6 +95,8 @@
 		BB1000000A3F00000100AA01 /* SentenceContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceContext.swift; sourceTree = "<group>"; };
 		BB1000000A4F00000100AA01 /* AutoSwitchAppProfiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSwitchAppProfiles.swift; sourceTree = "<group>"; };
 		BB1000000B0F00000100AA01 /* pack-it.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-it.txt.gz"; path = "Resources/pack-it.txt.gz"; sourceTree = "<group>"; };
+		BB1000000C1A00000100AA01 /* common-ru.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "common-ru.txt.gz"; path = "Resources/common-ru.txt.gz"; sourceTree = "<group>"; };
+		BB1000000C1B00000100AA01 /* common-en.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "common-en.txt.gz"; path = "Resources/common-en.txt.gz"; sourceTree = "<group>"; };
 		BB1000000C0F00000100AA01 /* pack-business.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-business.txt.gz"; path = "Resources/pack-business.txt.gz"; sourceTree = "<group>"; };
 		BB1000000D0F00000100AA01 /* pack-gaming.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-gaming.txt.gz"; path = "Resources/pack-gaming.txt.gz"; sourceTree = "<group>"; };
 		BB1000000E0F00000100AA01 /* pack-slang.txt.gz */ = {isa = PBXFileReference; lastKnownFileType = archive.gzip; name = "pack-slang.txt.gz"; path = "Resources/pack-slang.txt.gz"; sourceTree = "<group>"; };
@@ -195,6 +199,8 @@
 				BB1000000A4F00000100AA01 /* AutoSwitchAppProfiles.swift */,
 				BB100000064F00000100AA01 /* ngram-ru.bin */,
 				BB1000000B0F00000100AA01 /* pack-it.txt.gz */,
+				BB1000000C1A00000100AA01 /* common-ru.txt.gz */,
+				BB1000000C1B00000100AA01 /* common-en.txt.gz */,
 				BB1000000C0F00000100AA01 /* pack-business.txt.gz */,
 				BB1000000D0F00000100AA01 /* pack-gaming.txt.gz */,
 				BB1000000E0F00000100AA01 /* pack-slang.txt.gz */,
@@ -280,6 +286,8 @@
 				BB200000052F00000100AA01 /* ru-typo.bin in Resources */,
 				BB200000064F00000100AA01 /* ngram-ru.bin in Resources */,
 				BB2000000B0F00000100AA01 /* pack-it.txt.gz in Resources */,
+				BB2000000C1A00000100AA01 /* common-ru.txt.gz in Resources */,
+				BB2000000C1B00000100AA01 /* common-en.txt.gz in Resources */,
 				BB2000000C0F00000100AA01 /* pack-business.txt.gz in Resources */,
 				BB2000000D0F00000100AA01 /* pack-gaming.txt.gz in Resources */,
 				BB2000000E0F00000100AA01 /* pack-slang.txt.gz in Resources */,

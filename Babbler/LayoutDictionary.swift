@@ -35,6 +35,9 @@ final class LayoutDictionary {
   /// Subset of `russian` the typo probe may match: see `hasWordOneInsertionAway`.
   private var russianTypo = HashedWordSet()
   private var russianCustom: Set<String> = []
+  /// Top 5000 words per language, for `hasCommonWordOneTypoAway`.
+  private var commonEnglish: Set<String> = []
+  private var commonRussian: Set<String> = []
   private var englishModel: NGramModel?
   private var russianModel: NGramModel?
   private let lock = NSLock()
@@ -69,6 +72,8 @@ final class LayoutDictionary {
       let ruTypo = Bundle.main.url(forResource: "ru-typo", withExtension: "bin")
         .flatMap { HashedWordSet(contentsOf: $0) } ?? HashedWordSet()
       let ruCustom = Self.loadCustomWords(named: "custom-ru")
+      let commonEn = Self.loadWords(named: "common-en")
+      let commonRu = Self.loadWords(named: "common-ru")
       let enModel = Bundle.main.url(forResource: "ngram-en", withExtension: "bin")
         .flatMap { NGramModel(contentsOf: $0) }
       let ruModel = Bundle.main.url(forResource: "ngram-ru", withExtension: "bin")
@@ -81,6 +86,8 @@ final class LayoutDictionary {
       self.russian = ru
       self.russianTypo = ruTypo
       self.russianCustom = ruCustom
+      self.commonEnglish = commonEn
+      self.commonRussian = commonRu
       self.isLoaded = !en.isEmpty && !ru.isEmpty
       self.lock.unlock()
     }
@@ -179,6 +186,97 @@ final class LayoutDictionary {
   /// Below this length a dropped keystroke leaves too little signal, and the
   /// candidate space is dense enough that almost anything matches something.
   static let minimumTypoLength = 5
+
+  /// Whether `word` is one vowel substitution, doubled letter or adjacent
+  /// transposition away from a top-5000 word of `layout`'s language. Only the
+  /// first full-dictionary candidate is checked, and the typo must be at least
+  /// 4 characters (5 for transpositions). Measured on EN and RU top-20k with
+  /// these guards: 0 false positives against the top-20k, proper nouns and
+  /// English collisions.
+  func hasCommonWordOneTypoAway(_ word: String, in layout: Layout) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    guard isLoaded else { return false }
+    let common = layout == .english ? commonEnglish : commonRussian
+    guard !common.isEmpty else { return false }
+
+    let chars = Array(word)
+    let passes: [(candidates: [String], minimumLength: Int)] = [
+      (Self.vowelCandidates(chars, in: layout, optional: false), 4),
+      (Self.vowelCandidates(chars, in: layout, optional: true), 4),
+      (Self.doubledCandidates(chars), 4),
+      (Self.swapCandidates(chars), 5),
+    ]
+    for pass in passes where chars.count >= pass.minimumLength {
+      guard let target = pass.candidates.first(where: { containsLocked($0, in: layout) }) else {
+        continue
+      }
+      if common.contains(target) { return true }
+    }
+    return false
+  }
+
+  private static func vowelCandidates(_ chars: [Character], in layout: Layout, optional: Bool) -> [String] {
+    var out = Set<String>()
+    for i in chars.indices {
+      for target in vowelSubstitutes(chars[i], in: layout, optional: optional) {
+        var c = chars
+        c[i] = target
+        out.insert(String(c))
+      }
+    }
+    return out.sorted()
+  }
+
+  private static func vowelSubstitutes(_ c: Character, in layout: Layout, optional: Bool) -> [Character] {
+    if layout == .russian {
+      if optional {
+        switch c {
+        case "е": return ["я"]
+        case "я": return ["е"]
+        case "и": return ["ы"]
+        case "ы": return ["и"]
+        default: return []
+        }
+      }
+      switch c {
+      case "о": return ["а"]
+      case "а": return ["о"]
+      case "е": return ["и"]
+      case "и": return ["е"]
+      default: return []
+      }
+    }
+    if optional { return [] }
+    switch c {
+    case "a": return ["e"]
+    case "e": return ["a", "i"]
+    case "i": return ["e"]
+    case "o": return ["u"]
+    case "u": return ["o"]
+    default: return []
+    }
+  }
+
+  private static func doubledCandidates(_ chars: [Character]) -> [String] {
+    var out = Set<String>()
+    for i in 0..<max(0, chars.count - 1) where chars[i] == chars[i + 1] {
+      var c = chars
+      c.remove(at: i)
+      out.insert(String(c))
+    }
+    return out.sorted()
+  }
+
+  private static func swapCandidates(_ chars: [Character]) -> [String] {
+    var out = Set<String>()
+    for i in 0..<max(0, chars.count - 1) where chars[i] != chars[i + 1] {
+      var c = chars
+      c.swapAt(i, i + 1)
+      out.insert(String(c))
+    }
+    return out.sorted()
+  }
 
   private static func loadWords(named name: String) -> Set<String> {
     guard let url = Bundle.main.url(forResource: name, withExtension: "txt.gz"),

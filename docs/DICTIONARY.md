@@ -331,6 +331,18 @@ Two extra guards, both measured: a minimum length of five characters, and the
 reconstructed word must start with the same character the user typed. Typos
 essentially never hit the first key, and requiring it lowered false positives.
 
+### Common-word lists for vowel, doubled-letter and swap typos
+
+Three extra typo classes are checked against two shipped lists,
+`common-en.txt.gz` and `common-ru.txt.gz`: the top 5000 words of each frequency
+list, built by `scripts/build_common_words.py` from the same ranking the typo
+tests use. A converted word matches when one vowel substitution (RU о↔а, е↔и,
+е↔я, и↔ы; EN a/e/i/o/u pairs), one doubled letter removed, or one adjacent
+transposition yields a word in the list. Guards: vowel substitution needs length
+≥4, doubled letter length ≥4, transposition length ≥5. Measured false positives
+on the EN and RU top-20k lists, proper nouns and EN collisions: 0 with these
+guards.
+
 ### The spelling is never corrected
 
 The typo match decides *whether* to switch. It never builds the replacement.
