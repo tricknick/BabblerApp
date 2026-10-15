@@ -112,6 +112,15 @@ enum AutoSwitchEngine {
 
     let (trimmed, titleCase) = titleCaseCandidate(rawWord, currentLayout: currentLayout)
 
+    // A mixed-case run ("шЗрщту") only ever switches as one of a small curated
+    // set of EN brand/tech names typed with the RU layout active: see
+    // mixedCaseBrandTier. Checked before the hyphen split below (some of these
+    // names, e.g. "FreeBSD", never contain one, but the gate is cheap and must
+    // run before isEligible would otherwise reject the mixed case outright).
+    if currentLayout == .russian, let tier = mixedCaseBrandTier(trimmed) {
+      return tier
+    }
+
     // Dictionaries never index the hyphen itself ("-" is disqualifying below), so a
     // hyphenated token ("где-то", "python-telegram-bot") is judged side by side
     // instead of as a whole: see hyphenTier.
@@ -119,7 +128,13 @@ enum AutoSwitchEngine {
       return hyphenTier(trimmed, titleCase: titleCase, currentLayout: currentLayout, dictionary: dictionary)
     }
 
-    guard isEligible(trimmed, allowTitleCase: titleCase), !looksLikeCodeOrAddress(trimmed) else {
+    // ALL-CAPS ("GHBDTN", "ФЗШ") reads as Caps Lock left on in the wrong
+    // layout. Evaluated the same as Title-case below — lowercase form, exact
+    // tiers only — never typo or language model, which are far likelier to
+    // misfire on a short acronym than catch a genuine layout mistake.
+    let allCaps = isAllCaps(trimmed)
+
+    guard isEligible(trimmed, allowTitleCase: titleCase || allCaps), !looksLikeCodeOrAddress(trimmed) else {
       return nil
     }
 
@@ -151,6 +166,14 @@ enum AutoSwitchEngine {
       return nil
     }
 
+    // See shortAllCapsRuAcronyms: a short ALL-CAPS run converting to Russian
+    // is far likelier to be an obscure inflected-form collision than a real
+    // Caps Lock mistake, so it needs either enough letters or the curated list.
+    if allCaps, currentLayout == .english, converted.count < 5,
+       !shortAllCapsRuAcronyms.contains(converted) {
+      return nil
+    }
+
     // Theme-pack forms are checked before the trailing-punctuation rule below:
     // "ye," is the English "ye" plus a comma, but it types "нуб".
     if isThemePackHit(converted, target: currentLayout.other) { return .exact }
@@ -176,10 +199,11 @@ enum AutoSwitchEngine {
       return .exact
     }
 
-    // A Title-case word is evaluated as its lowercase form, but only the exact
-    // tiers above may switch it: a typo or n-gram guess about a capitalized
-    // word is far likelier to be a name or brand than a layout mistake.
-    if titleCase { return nil }
+    // A Title-case or ALL-CAPS word is evaluated as its lowercase form, but
+    // only the exact tiers above may switch it: a typo or n-gram guess about
+    // a capitalized word is far likelier to be a name, brand, or acronym than
+    // a layout mistake.
+    if titleCase || allCaps { return nil }
 
     // A sentence firmly anchored in the current layout (three or more words
     // running) is strong enough evidence on its own that the bottom two tiers,
@@ -592,7 +616,9 @@ enum AutoSwitchEngine {
   }
 
   private static func isEligible(_ word: String, allowTitleCase: Bool) -> Bool {
-    // Too short to judge: "ok", "hi", "и", "не".
+    // Too short to judge: "ok", "hi", "и", "не". Also the gate that keeps a
+    // 2-letter ALL-CAPS run ("KB", "СО") from ever being judged: too ambiguous
+    // to risk even through the exact tiers.
     if word.count < 3 { return false }
 
     // Digits mean an identifier, a version, a password.
@@ -602,12 +628,74 @@ enum AutoSwitchEngine {
 
     // Proper nouns and acronyms are often missing from the word lists, and
     // rewriting a name is very visible. Any capital disqualifies, except a
-    // Title-case word ("Hello", "Привет"), which the caller evaluates as its
-    // lowercase form through the exact tiers only. ALL-CAPS and mixed case
-    // ("JSON", "iPhone") are not Title-case and stay disqualified.
+    // Title-case word ("Hello", "Привет") or an ALL-CAPS one ("GHBDTN",
+    // "ФЗШ"), both of which the caller evaluates as their lowercase form
+    // through the exact tiers only (see `allowTitleCase` callers in
+    // `matchTier`). Mixed case ("iPhone", "GitHub") is handled separately, by
+    // `mixedCaseBrandTier`, before this gate is ever reached, and stays
+    // disqualified here.
     if word != word.lowercased() && !allowTitleCase { return false }
 
     return true
+  }
+
+  /// True when `word` has at least one letter and every letter in it is
+  /// uppercase — "GHBDTN", "ФЗШ", "API". False for Title-case ("Hello"),
+  /// mixed case ("iPhone"), and all-lowercase words. Digits and punctuation
+  /// are ignored here; `isEligible`'s own digit and disqualifying-character
+  /// checks reject those separately, the same as they do for a lowercase word.
+  private static func isAllCaps(_ word: String) -> Bool {
+    let letters = word.filter { $0.isLetter }
+    guard !letters.isEmpty else { return false }
+    return letters.allSatisfy { $0.isUppercase }
+  }
+
+  /// True when `word` mixes uppercase and lowercase letters without being
+  /// Title-case — "iPhone", "GitHub", "OAuth" — as opposed to all-lowercase,
+  /// ALL-CAPS, or a single leading capital.
+  private static func isMixedCase(_ word: String) -> Bool {
+    let hasUpper = word.contains { $0.isUppercase }
+    let hasLower = word.contains { $0.isLowercase }
+    return hasUpper && hasLower && !isTitleCase(word)
+  }
+
+  /// A curated, canonical-cased set of mixed-case EN tech/brand names. A run
+  /// typed with the RU layout active reads as Cyrillic letters whose case
+  /// pattern survives untouched ("шЗрщту" is physically the same shift
+  /// sequence as "iPhone"), so the case-preserving conversion of a mixed-case
+  /// typed word is checked against this set letter-for-letter — not merely
+  /// case-insensitively — before anything is allowed to switch. Dictionary
+  /// lookups elsewhere in this file are all lowercase-only and cannot stand
+  /// in for this: "iphone" is not a word, only "iPhone" spelled exactly is.
+  private static let mixedCaseBrandTerms: Set<String> = [
+    "macOS", "iOS", "iPadOS", "iPhone", "iPad", "iMac", "iCloud", "iTunes",
+    "AirPods", "MacBook", "GitHub", "GitLab", "YouTube", "WordPress",
+    "PayPal", "TypeScript", "JavaScript", "PostgreSQL", "MongoDB", "OAuth",
+    "GeForce", "FreeBSD", "OpenAI", "ChatGPT", "TikTok", "WeChat",
+  ]
+
+  /// A 3-4 letter ALL-CAPS run checked against the full Russian inflected
+  /// dictionary (3M+ forms) collides too easily with ordinary English
+  /// acronyms that are not common enough to be in en.txt.gz ("RFC" -> "кас",
+  /// "JCB" -> "оси", "LTPS" -> "дезы" are all real but obscure inflected
+  /// forms). Below 5 letters the exact-tier RU match is restricted to this
+  /// small curated set of well-known short Russian acronyms instead of the
+  /// blanket dictionary, bounding the false-positive risk to names chosen by
+  /// hand. 5+ letter collisions were not observed and are left unrestricted.
+  private static let shortAllCapsRuAcronyms: Set<String> = ["мвд", "мгу", "ссср"]
+
+  /// The exact tier for a mixed-case EN brand/tech name typed with the RU
+  /// layout active, or nil if `trimmed` is not mixed case or does not convert
+  /// to one of `mixedCaseBrandTerms`. Checked ahead of `isEligible`, which
+  /// would otherwise reject any mixed-case run outright; everything other
+  /// than this curated set stays disqualified exactly as before.
+  private static func mixedCaseBrandTier(_ trimmed: String) -> Tier? {
+    guard isMixedCase(trimmed),
+          trimmed.rangeOfCharacter(from: .decimalDigits) == nil,
+          trimmed.rangeOfCharacter(from: disqualifyingCharacters) == nil
+    else { return nil }
+    let converted = convert(trimmed, to: .english)
+    return mixedCaseBrandTerms.contains(converted) ? .exact : nil
   }
 
   /// True when `word` starts with an uppercase letter and has no other

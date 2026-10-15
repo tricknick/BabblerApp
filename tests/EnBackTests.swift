@@ -19,7 +19,10 @@ import Foundation
 //   lowercase form. It may switch ONLY via exact tiers (dictionary, theme pack, user
 //   lexicon, punctuation/contraction rule), never via typo or n-gram. The replacement keeps
 //   the case: convert() maps upper <-> upper, so convert(convert(w, to: x), to: back) == w.
-//   ALL-CAPS and mixed case (JSON, iPhone, GitHub, ПРИВЕТ, ВКонтакте) stay .keep.
+//   ALL-CAPS words (>= 3 letters) with a dictionary hit (JSON, NASA, ПРИВЕТ) and curated
+//   mixed-case EN brand names (iPhone, GitHub) now switch via the ALL-CAPS/brand exact tiers
+//   (see tests/caps_test.sh for the full contract); other ALL-CAPS/mixed case (ВКонтакте,
+//   2-letter acronyms, gibberish) stays .keep.
 //   Positives: EN Title-case on RU layout (words, with trailing punctuation, I-contractions),
 //   RU Title-case on EN layout. Negatives: Title-case of 20k frequent RU/EN words in their
 //   native layout (N5/N6), proper-noun list in native layout (N7), and Title-case of
@@ -297,17 +300,37 @@ for word in ruCapsFixed + ruCapsFreq {
         "\(titled) typed=\(typed) decision=\(AutoSwitchEngine.evaluate(word: typed, currentLayout: .english))")
 }
 
-let capsKeepEN = ["JSON", "API", "iPhone", "GitHub", "NASA", "HTML", "CPU", "SQL", "URL", "README",
-                  "iOS", "macOS", "McDonald", "JavaScript", "PostgreSQL", "USA", "DevOps"]
+// Words without a dictionary/brand hit (or too short) must still stay .keep.
+let capsKeepEN = ["HTML", "CPU", "README", "McDonald", "DevOps"]
 for word in capsKeepEN {
   let typed = AutoSwitchEngine.convert(word, to: .russian)
   check("caps-keep", AutoSwitchEngine.evaluate(word: typed, currentLayout: .russian) == .keep,
         "\(word) typed=\(typed) switched")
 }
-for word in ["ПРИВЕТ", "ОК", "СССР", "ВКонтакте", "МГУ", "ЯНДЕКС"] {
+for word in ["ОК", "ВКонтакте"] {
   let typed = AutoSwitchEngine.convert(word, to: .english)
   check("caps-keep", AutoSwitchEngine.evaluate(word: typed, currentLayout: .english) == .keep,
         "\(word) typed=\(typed) switched")
+}
+
+// ALL-CAPS/mixed-case words that DO have a dictionary or brand hit now switch (the bug this
+// feature fixes); a few representatives are pinned here, the full contract lives in caps_test.sh.
+let capsSwitchEN = ["JSON", "API", "NASA", "SQL", "URL", "USA"]
+for word in capsSwitchEN {
+  let typed = AutoSwitchEngine.convert(word, to: .russian)
+  check("caps-switch", switchesCorrectly(typed: typed, layout: .russian, expected: word),
+        "\(word) typed=\(typed) decision=\(AutoSwitchEngine.evaluate(word: typed, currentLayout: .russian))")
+}
+let capsSwitchBrandsEN = ["iPhone", "GitHub", "iOS", "macOS", "JavaScript", "PostgreSQL"]
+for word in capsSwitchBrandsEN {
+  let typed = AutoSwitchEngine.convert(word, to: .russian)
+  check("caps-switch", switchesCorrectly(typed: typed, layout: .russian, expected: word),
+        "\(word) typed=\(typed) decision=\(AutoSwitchEngine.evaluate(word: typed, currentLayout: .russian))")
+}
+for word in ["ПРИВЕТ", "СССР", "МГУ", "ЯНДЕКС"] {
+  let typed = AutoSwitchEngine.convert(word, to: .english)
+  check("caps-switch", switchesCorrectly(typed: typed, layout: .english, expected: word),
+        "\(word) typed=\(typed) decision=\(AutoSwitchEngine.evaluate(word: typed, currentLayout: .english))")
 }
 
 // Fallback-tier discriminators: a Title-case word whose lowercase only typo/n-gram would catch.
@@ -419,7 +442,7 @@ for form in droppedForms {
 
 let labels = ["fixture", "step1", "step3", "step3-neg", "N1", "N2-fixture", "N2", "N3", "N4",
               "caps-roundtrip", "caps-fixture", "caps-en", "caps-punct", "caps-I", "caps-ru",
-              "caps-keep", "caps-cands", "caps-typo", "caps-ngram", "N5", "N6", "N7-fixture", "N7",
+              "caps-keep", "caps-switch", "caps-cands", "caps-typo", "caps-ngram", "N5", "N6", "N7-fixture", "N7",
               "step5-fixture", "step5-dict", "step5-neg", "step5",
               "step6-fixture", "step6", "step6-dropped", "step6-core", "step6-common"]
 print("=== SUMMARY (failing / cases)")

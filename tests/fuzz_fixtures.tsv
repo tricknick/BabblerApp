@@ -1,0 +1,68 @@
+# Hand-written failing fixtures for the top realistic fuzz clusters (see build/fuzz/FINDINGS.md).
+# Format: source<TAB>breaker<TAB>sentence. Sentences are natural Russian; the breaker form is applied in the text.
+# Cluster A: all_caps   - ALL-CAPS Russian (Caps Lock left on in the wrong layout), incl. acronyms.
+hand	all_caps	ВЧЕРА МЫ ДОЛГО ОБСУЖДАЛИ НОВЫЙ ПЛАН РАБОТЫ.
+hand	all_caps	ОБЯЗАТЕЛЬНО ПРОВЕРЬТЕ НАСТРОЙКИ ПЕРЕД ЗАПУСКОМ.
+hand	all_caps	ЭТО ОЧЕНЬ ВАЖНОЕ РЕШЕНИЕ, КОТОРОЕ НУЖНО СОГЛАСОВАТЬ.
+hand	all_caps	НИКТО НЕ ОЖИДАЛ ТАКОГО РЕЗУЛЬТАТА.
+hand	all_caps	СРОЧНО ОТПРАВЬТЕ ОТЧЁТ ДИРЕКТОРУ.
+hand	all_caps	ПОЖАЛУЙСТА, НЕ ЗАБУДЬТЕ ВЫКЛЮЧИТЬ СВЕТ.
+hand	all_caps	ЗАВТРА НАЧИНАЕТСЯ БОЛЬШАЯ КОНФЕРЕНЦИЯ В МОСКВЕ.
+hand	all_caps	ПРОЕКТ ПРИОСТАНОВЛЕН ДО ОСОБОГО РАСПОРЯЖЕНИЯ.
+hand	all_caps	СЕРВЕР ПЕРЕЗАГРУЖЕН, ЛОГИ СОХРАНЕНЫ.
+hand	all_caps	ИСПРАВЬТЕ ОШИБКУ В ФАЙЛЕ КОНФИГУРАЦИИ СРОЧНО.
+hand	all_caps	КЛИЕНТ ТРЕБУЕТ ВЕРНУТЬ ДЕНЬГИ ДО КОНЦА НЕДЕЛИ.
+hand	all_caps	ЗАЧЕМ МЫ ПОТРАТИЛИ ТАК МНОГО ВРЕМЕНИ НА ЭТО?
+hand	all_caps	ДОКУМЕНТАЦИЯ ЕЩЁ НЕ ГОТОВА, НО РАБОТА ИДЁТ.
+hand	all_caps	ПРОВЕРЬТЕ ПОДКЛЮЧЕНИЕ ПО SSH ПЕРЕД ДЕПЛОЕМ.
+hand	all_caps	ВЫ ДОЛЖНЫ ОТКРЫТЬ ДОСТУП ДЛЯ API ДО ПОНЕДЕЛЬНИКА.
+hand	all_caps	ПОДКЛЮЧИТЕСЬ ЧЕРЕЗ VPN, ИНАЧЕ ДОСТУПА НЕ БУДЕТ.
+hand	all_caps	ЭТОТ ФОРМАТ ЧИТАЕТ ТОЛЬКО ПАРСЕР JSON.
+# Cluster B: all_caps_short - ALL-CAPS Russian sentences dense in 2-letter words (НА, НЕ, ОН, ЛИ, ВО...), no punctuation.
+hand	all_caps_short	ОН НЕ ЗНАЛ ОБ ЭТОМ ДО ВСТРЕЧИ
+hand	all_caps_short	ЭТО БЫЛО НА ПРОШЛОЙ НЕДЕЛЕ ВО ВТОРНИК
+hand	all_caps_short	ОН ТАК И НЕ ПРИШЁЛ НА СОБРАНИЕ
+hand	all_caps_short	ЗАЧЕМ ЖЕ ОН ЭТО СДЕЛАЛ
+hand	all_caps_short	МЫ ПОЙДЁМ ДОМОЙ ПО ДОРОГЕ ЧЕРЕЗ ПАРК
+hand	all_caps_short	ВЫ ЛИ СО МНОЙ СЕГОДНЯ ВЕЧЕРОМ
+hand	all_caps_short	КНИГА ЛЕЖИТ НА СТОЛЕ ИЛИ В ШКАФУ
+hand	all_caps_short	ЗА ЭТО НИКТО НЕ ОТВЕЧАЕТ
+hand	all_caps_short	ЗДЕСЬ НЕТ НИ ОДНОГО ЧЕЛОВЕКА
+hand	all_caps_short	Я ТОЖЕ НЕ ЗНАЮ КТО ЭТО ТАК РЕШИЛ
+hand	all_caps_short	ОН УЖЕ ПРИЕХАЛ ИЗ ОТПУСКА
+hand	all_caps_short	МЫ ВСЕ ЖДЁМ ОТВЕТА ОТ НИХ
+hand	all_caps_short	ДО КОНЦА ГОДА ОСТАЛОСЬ МАЛО ВРЕМЕНИ
+hand	all_caps_short	ЗА ЭТИ ДЕНЬГИ МОЖНО КУПИТЬ ДВА ТЕЛЕФОНА
+hand	all_caps_short	ЛЮДИ НЕ ВЕРЯТ НИ ЕМУ НИ ЕЁ СЛОВАМ
+# Cluster C: all_caps_punct - ALL-CAPS Russian word directly followed by , . : ? (Caps Lock on in the wrong layout).
+hand	all_caps_punct	СЕГОДНЯ ВЕЧЕРОМ, ПОСЛЕ РАБОТЫ, ЕДЕМ НА ДАЧУ.
+hand	all_caps_punct	НЕ ЗНАЮ, ЧТО ДЕЛАТЬ ДАЛЬШЕ: ПОМОГИТЕ.
+hand	all_caps_punct	ОН ВСЁ ВРЕМЯ ОПАЗДЫВАЕТ, НО ВСЕГДА ИЗВИНЯЕТСЯ.
+hand	all_caps_punct	ЭТО ОЧЕНЬ ПРОСТО, ДАЖЕ РЕБЁНОК СПРАВИТСЯ.
+hand	all_caps_punct	СРОЧНО НУЖНО РЕШЕНИЕ, ИНАЧЕ ПРОЕКТ ЗАКРОЮТ.
+hand	all_caps_punct	ПОЧЕМУ ТАК ДОРОГО, КТО ОТВЕТИТ?
+hand	all_caps_punct	ВСЕ УЖЕ ЗНАЮТ, ЧТО ДАЛЬШЕ БУДЕТ СЛОЖНО.
+hand	all_caps_punct	ВЕРНИТЕСЬ ЗАВТРА, ТОГДА ПОГОВОРИМ.
+hand	all_caps_punct	КОМАНДА ГОТОВА, ОСТАЛОСЬ ТОЛЬКО ТЕСТИРОВАНИЕ.
+hand	all_caps_punct	НАЧАЛЬНИК СКАЗАЛ НЕТ, ЗНАЧИТ НЕТ.
+hand	all_caps_punct	ЗАКАЗ ПРИШЁЛ, НО ДОСТАВКА ЗАДЕРЖИТСЯ.
+hand	all_caps_punct	ЛУЧШЕ ПОДОЖДАТЬ, ЧЕМ ПОТОМ ЖАЛЕТЬ.
+hand	all_caps_punct	КНИГА ИНТЕРЕСНАЯ, ЧИТАЙТЕ ВНИМАТЕЛЬНО.
+hand	all_caps_punct	ПОЗВОНИТЕ МНЕ, КОГДА БУДЕТЕ СВОБОДНЫ.
+hand	all_caps_punct	СЧЁТ ОПЛАЧЕН, ДОКУМЕНТЫ ОТПРАВЛЕНЫ.
+# Cluster D: mixed_case - English brand/product names with inner capitals (macOS, iPhone, OAuth) in Russian text.
+hand	mixed_case	Вчера я обновил macOS до новой версии.
+hand	mixed_case	Купил iPhone в прошлом месяце, доволен.
+hand	mixed_case	Вход реализован через OAuth, всё безопасно.
+hand	mixed_case	Драйвер GeForce стал работать стабильнее.
+hand	mixed_case	Я настроил MacBook Pro для работы.
+hand	mixed_case	Приложение доступно и на iOS, и на Android.
+hand	mixed_case	Установил TypeScript на новый проект.
+hand	mixed_case	Мы используем PostgreSQL в основном проекте.
+hand	mixed_case	Настроил GitHub Actions для сборки.
+hand	mixed_case	Поставь Google Chrome, он заметно быстрее.
+hand	mixed_case	Обновление для iPad вышло сегодня.
+hand	mixed_case	Сервис работает на MongoDB и Redis.
+hand	mixed_case	Из-за бага в WordPress сайт упал.
+hand	mixed_case	Открой YouTube и посмотри ролик.
+hand	mixed_case	Тестировал FreeBSD на старом ноутбуке.

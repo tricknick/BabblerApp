@@ -140,3 +140,10 @@ omg
 lol
 thx
 pls
+
+# --- all-caps tech/business acronyms (typed on the wrong layout) ---
+url
+http
+sql
+usb
+ceo

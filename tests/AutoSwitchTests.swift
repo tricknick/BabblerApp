@@ -147,11 +147,15 @@ for (typed, layout) in [("ghbdtn", Layout.english), ("rjvgm.nth", .english), ("h
 
 print("=== rejections")
 for (word, layout) in [("ok", Layout.english), ("abc123", .english), ("user@host.com", .english),
-                       ("GHBDTN", .english), ("src/main", .english), ("hello", .english),
+                       ("src/main", .english), ("hello", .english),
                        ("привет", .russian)] {
   check(AutoSwitchEngine.evaluate(word: word, currentLayout: layout) == .keep,
         "\(word) must be kept")
 }
+// GHBDTN is ALL-CAPS "привет" typed on the English layout; it is now
+// intentionally switched (see tests/CapsTests.swift), not kept.
+check(AutoSwitchEngine.evaluate(word: "GHBDTN", currentLayout: .english) == .switchLayout,
+      "GHBDTN must switch")
 
 print("=== short words: never switched alone, but eligible for a phrase sweep")
 for word in ["z", "yt", "b", "ns", "gj"] {
@@ -731,7 +735,9 @@ for typed in ["asdfgh", "qwertyuiop", "йцукенгш", "фывапролдж"
   let layout: Layout = typed.unicodeScalars.contains { $0.value > 0x7f } ? .russian : .english
   check(AutoSwitchEngine.evaluate(word: typed, currentLayout: layout) == .keep, "\(typed) must be kept")
 }
-for typed in [";jgtwrbq_v2", "grafana2", "GHBDTN", ";jgtwrbq@mail", "/,bpytc", ",bpytc.exe/"] {
+// GHBDTN moved out: it is ALL-CAPS "привет" typed on English and now
+// intentionally switches (see tests/CapsTests.swift), not keyboard mashing.
+for typed in [";jgtwrbq_v2", "grafana2", ";jgtwrbq@mail", "/,bpytc", ",bpytc.exe/"] {
   check(AutoSwitchEngine.evaluate(word: typed, currentLayout: .english) == .keep,
         "\(typed) must be kept")
 }
