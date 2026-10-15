@@ -39,7 +39,7 @@ enum AutoSwitchEngine {
   /// Punctuation safe to strip from the ends of a word. Excludes the
   /// layout-bearing characters above, so a word starting with б or ending in ю
   /// survives intact.
-  private static let trimmableCharacters = CharacterSet(charactersIn: "!?()\"«»…—")
+  private static let trimmableCharacters = CharacterSet(charactersIn: "!?()\"«»…—“”")
 
   /// Sentence punctuation that is also a Russian letter on the English layout:
   /// `,` is б, `.` is ю, `;` is ж, `'` is э. When one of these ends a typed run
@@ -98,6 +98,10 @@ enum AutoSwitchEngine {
   /// current-layout context disables both the n-gram and typo tiers outright.
   /// Exact, pack, and user-lexicon hits are confident enough that context
   /// cannot override them either way.
+  ///
+  /// Falls back to `wrapperStrippedTier` when the ordinary judging below finds
+  /// nothing: a word wrapped in brackets/quotes, or followed by punctuation
+  /// that is a real letter on the other layout, is judged there instead.
   static func matchTier(
     word rawWord: String,
     currentLayout: Layout,
@@ -105,6 +109,32 @@ enum AutoSwitchEngine {
     dictionary: LayoutDictionary = .shared
   ) -> Tier? {
     guard dictionary.isReady else { return nil }
+    return matchTierCore(word: rawWord, currentLayout: currentLayout, context: context, dictionary: dictionary)
+      ?? wrapperStrippedTier(rawWord, currentLayout: currentLayout, context: context, dictionary: dictionary)
+  }
+
+  /// Short dotted abbreviations are too short, and contain too much punctuation,
+  /// to ever reach the ordinary tiers below: "." is "/" on the other layout, one
+  /// of `disqualifyingCharacters`, so "n/l/" ("т.д.") is rejected by `isEligible`
+  /// before a dictionary is even consulted. Judged here instead, as a small,
+  /// explicit, exact-match-only whitelist, ahead of everything else.
+  private static let russianDottedAbbreviations: Set<String> = [
+    "т.д.", "т.п.", "т.е.", "т.к.", "см.", "ул.", "г.", "др.", "пр.",
+  ]
+  private static let englishDottedAbbreviations: Set<String> = ["e.g.", "i.e.", "etc.", "vs."]
+
+  private static func matchTierCore(
+    word rawWord: String,
+    currentLayout: Layout,
+    context: SentenceContextSnapshot?,
+    dictionary: LayoutDictionary
+  ) -> Tier? {
+    if currentLayout == .english, russianDottedAbbreviations.contains(convert(rawWord, to: .russian)) {
+      return .exact
+    }
+    if currentLayout == .russian, englishDottedAbbreviations.contains(convert(rawWord, to: .english)) {
+      return .exact
+    }
 
     if currentLayout == .russian, isPunctuatedEnglishHit(rawWord, dictionary: dictionary) {
       return .exact
@@ -794,5 +824,66 @@ enum AutoSwitchEngine {
       return rawWord
     }
     return stem
+  }
+
+  /// An extra wrapper character a word may carry on top of the universal
+  /// `trimmableCharacters`, keyed by the layout the word was typed on: the
+  /// English-layout keys that type Russian "[" / "]" ("~rjkbxtcndj" is
+  /// "[количество"), and the Russian-layout keys that type the English-side
+  /// bracket/quote/sentence punctuation a word ends up wrapped in or
+  /// followed by ("(ашдеукб" is "(filter,", "ФЗШж" is "API;").
+  private static let englishLayoutLeadingWrapperMarkers: Set<Character> = ["~"]
+  private static let englishLayoutTrailingWrapperMarkers: Set<Character> = ["`"]
+  private static let russianLayoutLeadingWrapperMarkers: Set<Character> = ["х"]
+  private static let russianLayoutTrailingWrapperMarkers: Set<Character> = ["ъ", "б", "ж", "Ж", "ю"]
+
+  /// Fallback for a word whose normal judging above found nothing because an
+  /// extra wrapper character sits at one of its edges, past the universal
+  /// trim `matchTierCore` already applies: "(ашдеукб" is "(filter," with the
+  /// parentheses stripped by the universal trim and the trailing "," left as
+  /// the Russian letter б. Strips at most one extra leading and one extra
+  /// trailing marker (after the universal trim, so a marker hiding just
+  /// inside a pair of parentheses — "(ИдгузкштеЖ)" is "(Blueprint:)" — is
+  /// reached too), then re-judges the core through `matchTierCore`, same as
+  /// any other word, accepting only an exact dictionary hit: a typo or
+  /// n-gram guess here is judging text the user never actually looked at.
+  ///
+  /// Guarded against ever reconsidering a word the ordinary tiers already
+  /// judged correctly: a real word kept as-is where it stands — "хлеб",
+  /// "объявление" — must not be peeled apart just because it happens to
+  /// start or end with a marker letter.
+  private static func wrapperStrippedTier(
+    _ rawWord: String,
+    currentLayout: Layout,
+    context: SentenceContextSnapshot?,
+    dictionary: LayoutDictionary
+  ) -> Tier? {
+    let universal = rawWord.trimmingCharacters(in: trimmableCharacters)
+    guard !universal.isEmpty else { return nil }
+    if dictionary.contains(universal.lowercased(), in: currentLayout) { return nil }
+
+    let leadingMarkers = currentLayout == .english
+      ? englishLayoutLeadingWrapperMarkers : russianLayoutLeadingWrapperMarkers
+    let trailingMarkers = currentLayout == .english
+      ? englishLayoutTrailingWrapperMarkers : russianLayoutTrailingWrapperMarkers
+
+    var core = Substring(universal)
+    var stripped = false
+    if let first = core.first, leadingMarkers.contains(first) {
+      core = core.dropFirst()
+      stripped = true
+    }
+    if let last = core.last, trailingMarkers.contains(last) {
+      core = core.dropLast()
+      stripped = true
+    }
+    guard stripped, core.count >= 3 else { return nil }
+
+    guard matchTierCore(
+      word: String(core), currentLayout: currentLayout, context: context, dictionary: dictionary
+    ) == .exact else {
+      return nil
+    }
+    return .exact
   }
 }
