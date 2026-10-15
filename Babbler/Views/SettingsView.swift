@@ -198,49 +198,62 @@ struct SettingsView: View {
                         }
                         .disabled(stats.total.switches == 0 && stats.total.undos == 0 && stats.total.manualSwaps == 0)
                     }
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Learned exceptions")
-                            Text(learnedWords.isEmpty
-                                 ? "Words you undo three times are never corrected again."
-                                 : learnedWords.joined(separator: ", "))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(3)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer()
-                        Button("Forget") {
-                            autoSwitchMemory.forgetAll()
-                            learnedWords = []
-                        }
-                        .disabled(learnedWords.isEmpty)
-                    }
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Remember my words")
-                            Text(learnedLexiconCount == 0
-                                 ? "Words you keep twice without correcting are never switched again."
-                                 : "Learned words: \(learnedLexiconCount)")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Reset") {
-                            userLexicon.reset()
-                            learnedLexiconCount = userLexicon.learnedCount
-                        }
-                        .disabled(learnedLexiconCount == 0)
-                        Toggle("", isOn: $userLexiconEnabled)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                    }
                 }
             }
 
             if autoSwitchEnabled {
                 Section {
-                    DisclosureGroup("Specific vocabularies") {
+                    DisclosureGroup("Vocabularies and exceptions") {
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Remember my words")
+                                Text(learnedLexiconCount == 0
+                                     ? "Words you keep twice without correcting are never switched again."
+                                     : "Learned words: \(learnedLexiconCount)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $userLexiconEnabled)
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                        }
+                        HStack(alignment: .center, spacing: 12) {
+                            Text("Forget learned words")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Reset") {
+                                userLexicon.reset()
+                                learnedLexiconCount = userLexicon.learnedCount
+                            }
+                            .disabled(learnedLexiconCount == 0)
+                        }
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Learned exceptions")
+                                Text(learnedWords.isEmpty
+                                     ? "Words you undo three times are never corrected again."
+                                     : learnedWords.joined(separator: ", "))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer()
+                            Button("Forget") {
+                                autoSwitchMemory.forgetAll()
+                                learnedWords = []
+                            }
+                            .disabled(learnedWords.isEmpty)
+                        }
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Specific vocabularies")
+                            Text("Extra words recognised as Russian when typed in the English layout.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         Toggle("IT", isOn: themePackBinding("it"))
                         Toggle("Business", isOn: themePackBinding("business"))
                         Toggle("Gaming", isOn: themePackBinding("gaming"))
