@@ -47,6 +47,23 @@ enum AutoSwitchEngine {
   /// "it" followed by a full stop.
   private static let ambiguousTrailingCharacters = CharacterSet(charactersIn: ",.;'")
 
+  /// Punctuation that can end an English word typed on the Russian layout
+  /// ("hello." is "руддщю"). The apostrophe is left out on purpose: "dont'"
+  /// must stay as typed.
+  private static let englishTrailingPunctuation = CharacterSet(charactersIn: ".,;:?!\"")
+
+  /// Common English contractions, lowercase. Only these apostrophe forms are
+  /// switched; anything else with an apostrophe ("tho'ts", "y'all") stays put.
+  private static let englishContractions: Set<String> = [
+    "don't", "can't", "won't", "isn't", "aren't", "wasn't", "weren't", "didn't", "doesn't",
+    "haven't", "hasn't", "hadn't", "shouldn't", "wouldn't", "couldn't", "mustn't", "needn't",
+    "shan't", "ain't", "it's", "that's", "what's", "there's", "here's", "where's", "who's",
+    "when's", "why's", "how's", "let's", "i'm", "i'll", "i've", "i'd", "you're", "you've",
+    "you'll", "you'd", "we're", "we've", "we'll", "we'd", "they're", "they've", "they'll",
+    "they'd", "he's", "she's", "he'll", "she'll", "he'd", "she'd", "it'll", "that'll",
+    "who'll", "there'll", "that'd", "who'd", "what'll", "what'd", "there'd",
+  ]
+
   /// Which rule decided to switch, strongest evidence first.
   enum Tier: Equatable {
     /// The conversion is a word in the other layout's dictionary.
@@ -84,6 +101,10 @@ enum AutoSwitchEngine {
     dictionary: LayoutDictionary = .shared
   ) -> Tier? {
     guard dictionary.isReady else { return nil }
+
+    if currentLayout == .russian, isPunctuatedEnglishHit(rawWord, dictionary: dictionary) {
+      return .exact
+    }
 
     let trimmed = rawWord.trimmingCharacters(in: trimmableCharacters)
     guard isEligible(trimmed), !looksLikeCodeOrAddress(trimmed) else { return nil }
@@ -321,6 +342,35 @@ enum AutoSwitchEngine {
       return true
     }
     return false
+  }
+
+  /// English-target only. A Russian-layout run that converts to an English word
+  /// with up to two trailing punctuation marks, or to a whitelisted contraction.
+  /// Judged on the exact dictionary alone, so no typo or n-gram tier applies.
+  private static func isPunctuatedEnglishHit(_ rawWord: String, dictionary: LayoutDictionary) -> Bool {
+    // A real Russian word keeps the usual answer, even if it ends in ю, б, ж, э or х.
+    let russianWord = rawWord.trimmingCharacters(in: trimmableCharacters).lowercased()
+    if dictionary.contains(russianWord, in: .russian) { return false }
+    if isUserLexiconHit(russianWord, target: .russian) { return false }
+    guard rawWord.rangeOfCharacter(from: disqualifyingCharacters) == nil else { return false }
+
+    var scalars = Array(convert(rawWord, to: .english).unicodeScalars)
+    var stripped = 0
+    while stripped < 2, let last = scalars.last, englishTrailingPunctuation.contains(last) {
+      scalars.removeLast()
+      stripped += 1
+    }
+    let stem = String(String.UnicodeScalarView(scalars))
+
+    if englishContractions.contains(stem) { return true }
+
+    guard stripped > 0,
+          stem.count >= 3,
+          stem.rangeOfCharacter(from: CharacterSet.letters.inverted) == nil,
+          stem == stem.lowercased(),
+          !looksLikeCodeOrAddress(stem)
+    else { return false }
+    return dictionary.contains(stem, in: .english)
   }
 
   private static func hasAmbiguousTrailing(_ word: String) -> Bool {

@@ -243,3 +243,74 @@ for (i, word) in ruFreq.enumerated() {
 }
 print("    correct \(ruCorrect) (\(ruCorrect * 100 / ruFreq.count)%)  wrong \(ruWrong)  kept \(ruFreq.count - ruCorrect - ruWrong)")
 ruCauses.report()
+
+// (e-realistic) Sentences replayed as AppDelegate runs them. The layout starts RU;
+// a switch flips it to EN for the following words, which are then typed correctly.
+// A switch on an exact-tier anchor sweeps up to 4 preceding words (<= 28 keys) that
+// qualify, using the tail since the last switch (AppDelegate.handleAutoSwitch, phrasePrefix).
+print("(e-realistic) 30 sentences, layout starts RU, follows auto-switch and phrase sweep")
+func realisticCause(_ token: String, typed: String) -> String {
+  if let last = token.last, ".,;:!?".contains(last) { return "trailing-punct" }
+  return enCause(token, typed: typed, coreSet: ruCore)
+}
+let realCauses = Tally()
+var realTokens = 0, realCorrect = 0
+var realByKind: [String: Int] = [:]
+var realWrongSwitches: [String] = []
+for sentence in sentences {
+  let tokensList = sentence.split(separator: " ").map(String.init)
+  var layout = Layout.russian
+  var tail: [(index: Int, typed: String, keys: Int)] = []
+  var correct = [Bool](repeating: false, count: tokensList.count)
+  var kind = [String](repeating: "", count: tokensList.count)
+  var typedOf = [String](repeating: "", count: tokensList.count)
+  for (index, token) in tokensList.enumerated() {
+    let typed = layout == .russian ? AutoSwitchEngine.convert(token, to: .russian) : token
+    typedOf[index] = typed
+    let switched = AutoSwitchEngine.evaluate(word: typed, currentLayout: layout) == .switchLayout
+    if !switched {
+      if layout == .english {
+        correct[index] = true
+        kind[index] = "typed-EN"
+      } else {
+        kind[index] = "kept-RU"
+      }
+      tail.append((index, typed, typed.count + 1))
+      if tail.count > 4 { tail.removeFirst() }
+      continue
+    }
+    correct[index] = AutoSwitchEngine.convert(typed, to: layout.other) == token
+    kind[index] = correct[index] ? "switched" : "wrong-switch"
+    var swept: [(index: Int, typed: String, keys: Int)] = []
+    if AutoSwitchEngine.isExactMatch(word: typed, currentLayout: layout) {
+      var keys = 0
+      for unit in tail.reversed() {
+        guard swept.count < 4, keys + unit.keys <= 28,
+              AutoSwitchEngine.qualifiesForPhraseExtension(word: unit.typed, currentLayout: layout) else { break }
+        swept.append(unit)
+        keys += unit.keys
+      }
+    }
+    for unit in swept {
+      correct[unit.index] = AutoSwitchEngine.convert(unit.typed, to: layout.other) == tokensList[unit.index]
+      kind[unit.index] = "swept"
+    }
+    tail = []
+    layout = layout.other
+  }
+  for index in tokensList.indices {
+    realTokens += 1
+    if correct[index] {
+      realCorrect += 1
+      realByKind[kind[index], default: 0] += 1
+    } else if kind[index] == "wrong-switch" {
+      realWrongSwitches.append(tokensList[index])
+    } else {
+      realCauses.add(realisticCause(tokensList[index], typed: typedOf[index]), tokensList[index])
+    }
+  }
+}
+print("    tokens \(realTokens)  correct \(realCorrect) (\(realCorrect * 100 / realTokens)%)  wrong-switch \(realWrongSwitches.count)")
+print("    correct by path: \(realByKind.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", "))")
+print("    wrong switches: \(realWrongSwitches.joined(separator: ", "))")
+realCauses.report()
