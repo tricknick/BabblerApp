@@ -107,6 +107,14 @@ enum AutoSwitchEngine {
     }
 
     let (trimmed, titleCase) = titleCaseCandidate(rawWord, currentLayout: currentLayout)
+
+    // Dictionaries never index the hyphen itself ("-" is disqualifying below), so a
+    // hyphenated token ("где-то", "python-telegram-bot") is judged side by side
+    // instead of as a whole: see hyphenTier.
+    if trimmed.contains("-") {
+      return hyphenTier(trimmed, titleCase: titleCase, currentLayout: currentLayout, dictionary: dictionary)
+    }
+
     guard isEligible(trimmed, allowTitleCase: titleCase), !looksLikeCodeOrAddress(trimmed) else {
       return nil
     }
@@ -417,6 +425,63 @@ enum AutoSwitchEngine {
           !looksLikeCodeOrAddress(lowerStem)
     else { return false }
     return dictionary.contains(lowerStem, in: .english)
+  }
+
+  /// Short particles that commonly form one side of a Russian hyphen compound —
+  /// "кто-то", "во-первых", "что-ж" — but are themselves too short, or too
+  /// specialised, to sit in the main word list at its usual frequency threshold.
+  /// Used only when the hyphen side is judged against Russian: see `hyphenTier`.
+  private static let russianHyphenParticles: Set<String> = [
+    "то", "либо", "нибудь", "таки", "ка", "де", "же", "ж", "кое", "во",
+  ]
+
+  /// Whether every part of an already hyphen-split word reads as a word in
+  /// `layout`. Russian trusts `russianHyphenParticles` as a fallback for a
+  /// dictionary miss; English does not, since there is no equivalent closed
+  /// set of short English hyphen-formants — every part there must be a full
+  /// dictionary word, which is what keeps code-ish tokens from qualifying.
+  private static func hyphenPartsAreWords(
+    _ parts: [String], layout: Layout, dictionary: LayoutDictionary
+  ) -> Bool {
+    parts.allSatisfy { part in
+      guard part.rangeOfCharacter(from: CharacterSet.letters.inverted) == nil else { return false }
+      if dictionary.contains(part, in: layout) { return true }
+      return layout == .russian && russianHyphenParticles.contains(part)
+    }
+  }
+
+  /// Whether a hyphenated token ("где-то", "python-telegram-bot") should switch
+  /// layout as a whole. Checked before the ordinary eligibility gate in
+  /// `matchTier`, since "-" is one of `disqualifyingCharacters` and would
+  /// otherwise rule every hyphenated word out immediately.
+  ///
+  /// Each side of each hyphen is judged independently with `hyphenPartsAreWords`,
+  /// first against the word as typed (so an already-legitimate hyphenation —
+  /// "well-known", "e-mail", or a correctly-typed Russian one like "кто-то" —
+  /// is left alone even where a part would also happen to convert), then
+  /// against the converted form. Only an `.exact` match is ever returned: a
+  /// typo or n-gram guess about one half of a hyphenated word is far likelier
+  /// to be noise than a layout mistake.
+  private static func hyphenTier(
+    _ trimmed: String, titleCase: Bool, currentLayout: Layout, dictionary: LayoutDictionary
+  ) -> Tier? {
+    guard trimmed.count >= 3,
+          trimmed == trimmed.lowercased() || titleCase,
+          trimmed.rangeOfCharacter(from: .decimalDigits) == nil,
+          !looksLikeCodeOrAddress(trimmed)
+    else { return nil }
+
+    let word = trimmed.lowercased()
+    let parts = word.split(separator: "-", omittingEmptySubsequences: false).map(String.init)
+    guard parts.count >= 2, parts.allSatisfy({ !$0.isEmpty }) else { return nil }
+
+    guard !hyphenPartsAreWords(parts, layout: currentLayout, dictionary: dictionary) else {
+      return nil
+    }
+
+    let target = currentLayout.other
+    let convertedParts = parts.map { convert($0, to: target) }
+    return hyphenPartsAreWords(convertedParts, layout: target, dictionary: dictionary) ? .exact : nil
   }
 
   private static func hasAmbiguousTrailing(_ word: String) -> Bool {
