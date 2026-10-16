@@ -56,7 +56,7 @@ struct SettingsView: View {
     @AppStorage(langSwitchKeyCodeKey) private var selectedSwitchKeyCodeRaw: Int = Int(Key.option)
     @AppStorage(menuBarIconStyleKey) private var menuBarIconStyle: MenuBarIconStyle = .flag
     @AppStorage(clipboardHistoryEnabledKey) private var clipboardHistoryEnabled: Bool = true
-    @AppStorage(autoSwitchEnabledKey) private var autoSwitchEnabled: Bool = false
+    @AppStorage(autoSwitchEnabledKey) private var autoSwitchEnabled: Bool = true
     @State private var configuredApps: [AppListItem] = []
     @State private var globeSetupInstructions: [String] = []
     // Read from the system, not UserDefaults — the user can also remove Babbler in Login Items

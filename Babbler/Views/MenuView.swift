@@ -47,7 +47,7 @@ struct MenuBarLabel: View {
   }
 
   var body: some View {
-    if appDelegate.isSecurityInput || !appDelegate.hasAccessibility {
+    if appDelegate.isSecurityInput || !appDelegate.hasAccessibility || !appDelegate.hasInputMonitoring {
       Image(nsImage: ImageUtils.addSecureInputDot(to: stateIconBase))
     } else if !isTextReplaceEnabled {
       Image(nsImage: ImageUtils.dimmed(stateIconBase))
@@ -107,6 +107,21 @@ struct MenuView: View {
                     appDelegate.requestAccessibilityPermissions()
                 } label: {
                     Text("Grant Accessibility Access...")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(MenuItemButtonStyle())
+                .padding(.bottom, 4)
+            } else if !appDelegate.hasInputMonitoring {
+                Text("⛔️ Babbler needs Input Monitoring to see typed words")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 2)
+                Button {
+                    dismiss()
+                    appDelegate.openInputMonitoringSettings()
+                } label: {
+                    Text("Grant Input Monitoring Access...")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(MenuItemButtonStyle())

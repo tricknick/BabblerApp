@@ -8,6 +8,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     @Published var isSecurityInput = false
     @Published var securityApp: String?
     @Published var hasAccessibility = AXIsProcessTrusted()
+    @Published var hasInputMonitoring = KeyboardUtils.hasInputMonitoringPermission
     @Published var globeKeyAvailable = false
 
     var isWaitingForSwitch = false
@@ -16,6 +17,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     var activeAppInputSourceId: String?
     let clipboardHistory = ClipboardHistory()
     var permissionCheckTimer: Timer?
+    var inputMonitoringTimer: Timer?
     // Safety net: if the input-source-changed notification never arrives, this fires
     // so isWaitingForSwitch can never latch on and permanently disable event handling.
     var switchWatchdog: Timer?
@@ -101,9 +103,45 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     // delivers only modifier events, so typed words are never recorded. Asked for only once
     // Accessibility is granted, and through the system prompt alone, so there is never a second dialog.
     func requestInputMonitoringIfNeeded() {
-        if !KeyboardUtils.hasInputMonitoringPermission {
-            _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+        hasInputMonitoring = KeyboardUtils.hasInputMonitoringPermission
+        guard !hasInputMonitoring else { return }
+        _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+        startInputMonitoringPolling()
+    }
+
+    // The grant arrives while Babbler runs; re-attach the key monitor then, so typing is
+    // seen without a restart.
+    func startInputMonitoringPolling() {
+        inputMonitoringTimer?.invalidate()
+        inputMonitoringTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+            guard let self else {
+                timer.invalidate()
+                return
+            }
+            guard KeyboardUtils.hasInputMonitoringPermission else { return }
+            timer.invalidate()
+            self.inputMonitoringTimer = nil
+            self.hasInputMonitoring = true
+            self.relaunch()
         }
+    }
+
+    // A fresh process is the only reliable way for a new Input Monitoring grant to reach
+    // the event monitors.
+    func relaunch() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 1; /usr/bin/open -n \"$0\"", Bundle.main.bundlePath]
+        try? task.run()
+        NSApp.terminate(nil)
+    }
+
+    func openInputMonitoringSettings() {
+        _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+            NSWorkspace.shared.open(url)
+        }
+        startInputMonitoringPolling()
     }
 
     func requestAccessibilityPermissions() {

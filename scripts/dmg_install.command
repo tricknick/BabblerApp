@@ -78,13 +78,16 @@ EOF
 fi
 
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" || true
+sleep 1
+open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent" || true
 
 cat <<'EOF'
 
 Готово. Включите Babbler в:
   Конфиденциальность и безопасность → Универсальный доступ (Accessibility)
   Конфиденциальность и безопасность → Мониторинг ввода (Input Monitoring)
-Затем перезапустите Babbler (меню Babbler → Quit, и снова открыть из Программ).
+Без «Мониторинга ввода» Babbler не видит набираемые слова и автопереключение не работает.
+Babbler подхватит разрешения сам; если нет — перезапустите его.
 
-Done. Enable Babbler in Accessibility and Input Monitoring, then relaunch it.
+Done. Enable Babbler in Accessibility and Input Monitoring (auto-switch needs both).
 EOF

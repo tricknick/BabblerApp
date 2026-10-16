@@ -158,9 +158,9 @@ class PreferenceStore {
         defaults.set(Array(items), forKey: pinnedClipboardItemsKey)
     }
 
-    // Auto switch is opt-in: an upgrade must not silently start rewriting text.
+    // On by default so a fresh install switches out of the box; an explicit off is kept.
     func getAutoSwitchEnabled() -> Bool {
-        return defaults.bool(forKey: autoSwitchEnabledKey)
+        return defaults.object(forKey: autoSwitchEnabledKey) as? Bool ?? true
     }
 
     func setAutoSwitchEnabled(_ value: Bool) {
