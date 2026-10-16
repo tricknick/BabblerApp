@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		282D00FC2F857DAC005467AC /* CrashLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282D00FB2F857DAC005467AC /* CrashLogger.swift */; };
 		1063F59D59E51B2726ED6A62 /* MissLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46FFDD1368D07EC6B52258D /* MissLog.swift */; };
+		7A64C4395F92E5EEE66D603C /* SelectionGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4526913C13A74FDF860884 /* SelectionGuard.swift */; };
 		285B522A29BDD87600D50A2D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AC0130323A68C9700FA3F07 /* AppDelegate.swift */; };
 		286A658A2F94003B00D25CBC /* MenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286A65892F94003B00D25CBC /* MenuView.swift */; };
 		286A658B2F94003B00D25CBC /* BabblerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286A65882F94003B00D25CBC /* BabblerApp.swift */; };
@@ -55,6 +56,7 @@
 /* Begin PBXFileReference section */
 		282D00FB2F857DAC005467AC /* CrashLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashLogger.swift; sourceTree = "<group>"; };
 		C46FFDD1368D07EC6B52258D /* MissLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissLog.swift; sourceTree = "<group>"; };
+		7C4526913C13A74FDF860884 /* SelectionGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionGuard.swift; sourceTree = "<group>"; };
 		282D00FD2F883EE6005467AC /* Babbler.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Babbler.xcodeproj; sourceTree = "<group>"; };
 		282D00FE2F883EE6005467AC /* Babbler v0.3.3.zip */ = {isa = PBXFileReference; lastKnownFileType = archive.zip; path = "Babbler v0.3.3.zip"; sourceTree = "<group>"; };
 		282D01002F883EE6005467AC /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
@@ -217,6 +219,7 @@
 				7A906C5825F3F95A00913B56 /* PreferenceStore.swift */,
 				282D00FB2F857DAC005467AC /* CrashLogger.swift */,
 				C46FFDD1368D07EC6B52258D /* MissLog.swift */,
+				7C4526913C13A74FDF860884 /* SelectionGuard.swift */,
 			);
 			path = Babbler;
 			sourceTree = "<group>";
@@ -336,6 +339,7 @@
 				7AC0131C23AE10D600FA3F07 /* InputSourceUtils.swift in Sources */,
 				282D00FC2F857DAC005467AC /* CrashLogger.swift in Sources */,
 				1063F59D59E51B2726ED6A62 /* MissLog.swift in Sources */,
+				7A64C4395F92E5EEE66D603C /* SelectionGuard.swift in Sources */,
 				7A765D6525D98B170076B974 /* WorkspaceUtils.swift in Sources */,
 				7A765D9325E2D7170076B974 /* ImageUtils.swift in Sources */,
 			);

@@ -341,11 +341,40 @@ final class GlobeKeyMonitor {
       replaceLog("replace: done")
     }
 
+    private static var isFetchingSelection = false
+
+    // Focused element's selected text via Accessibility; nil when the app does not expose it.
+    static func axSelectedText() -> String? {
+        let system = AXUIElementCreateSystemWide()
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(focused as! AXUIElement, kAXSelectedTextAttribute as CFString, &value) == .success
+        else { return nil }
+        return value as? String
+    }
+
     static func fetchSelectedText(_ callback: @escaping (String) -> Void) -> Void {
+        let axSelection = axSelectedText()
+        if let text = SelectionGuard.text(axSelection: axSelection, copied: nil, saved: "",
+                                          changeCountAfterClear: 0, changeCountNow: 0) {
+            replaceLog("select: AX selection '\(text)'")
+            callback(text)
+            return
+        }
+        // An overlapping fetch would save the cleared clipboard and see the other one's restore.
+        guard !isFetchingSelection else {
+            replaceLog("select: fetch already in progress, skipped")
+            callback("")
+            return
+        }
+        isFetchingSelection = true
+
         // Save current text from clipboard
         let clipboardText = NSPasteboard.general.string(forType: .string) ?? ""
-        NSPasteboard.general.clearContents()
-        replaceLog("select: app=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "nil") saved clipboard \(clipboardText.count) chars, types before copy=\(NSPasteboard.general.types?.map { $0.rawValue } ?? []) changeCount=\(NSPasteboard.general.changeCount)")
+        let changeCountAfterClear = NSPasteboard.general.clearContents()
+        replaceLog("select: app=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "nil") saved clipboard \(clipboardText.count) chars, changeCount=\(changeCountAfterClear)")
         
         // Fire Cmd+C
         let src = CGEventSource(stateID: CGEventSourceStateID.hidSystemState)
@@ -360,25 +389,30 @@ final class GlobeKeyMonitor {
         // downstream callback calls Carbon TIS APIs which also require the main thread.
         Task { @MainActor in
             // The app copies asynchronously, so a fixed delay was too short for slow apps and
-            // made the swap silently do nothing. We cleared the clipboard above, so any string
-            // appearing now is the copied selection; give up after ~300 ms (nothing selected).
-            var newClipboardText = ""
+            // made the swap silently do nothing. Wait for a write after our clear; give up
+            // after ~300 ms (nothing selected).
+            var copied: String?
             var waitedMs = 0
             for _ in 0..<30 {
                 try? await Task.sleep(nanoseconds: 10_000_000)
                 waitedMs += 10
-                if let copied = NSPasteboard.general.string(forType: .string) {
-                    newClipboardText = copied
+                if NSPasteboard.general.changeCount > changeCountAfterClear,
+                   let text = NSPasteboard.general.string(forType: .string) {
+                    copied = text
                     break
                 }
             }
-            replaceLog("select: after \(waitedMs) ms copied='\(newClipboardText)' (\(newClipboardText.utf16.count) utf16) types=\(NSPasteboard.general.types?.map { $0.rawValue } ?? []) changeCount=\(NSPasteboard.general.changeCount)\(newClipboardText.isEmpty ? " — TIMEOUT, nothing copied" : "")")
+            let text = SelectionGuard.text(axSelection: axSelection, copied: copied, saved: clipboardText,
+                                           changeCountAfterClear: changeCountAfterClear,
+                                           changeCountNow: NSPasteboard.general.changeCount) ?? ""
+            replaceLog("select: after \(waitedMs) ms copied \(copied?.count ?? -1) chars, using '\(text)'\(text.isEmpty ? " — nothing selected or clipboard echo" : "")")
 
             // Restore old clipboard contents
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(clipboardText, forType: .string)
+            isFetchingSelection = false
 
-            callback(newClipboardText)
+            callback(text)
         }
     }
     

@@ -14,6 +14,7 @@ KEYBOARD_SOURCES=(
   "$ROOT_DIR/Babbler/Key.swift"
   "$ROOT_DIR/Babbler/PreferenceStore.swift"
   "$ROOT_DIR/Babbler/KeyboardUtils.swift"
+  "$ROOT_DIR/Babbler/SelectionGuard.swift"
   "$ROOT_DIR/Babbler/InputSourceUtils.swift"
   "$ROOT_DIR/Babbler/TISInputSourceExtension.swift"
   "$ROOT_DIR/Babbler/KeyDictionary.swift"
